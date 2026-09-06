@@ -115,3 +115,17 @@ most (novel or compound failures). The agent loop is what buys resilience.
 - `agent.py` — AdaptiveAgent (observe/decide/act/evaluate/adapt) and BaselineAgent
 - `run_demo.py` — comparison runner
 - `sample_run.log` — example output from `python3 run_demo.py --trace`
+- `docs/index.html` — **browser demo**, a self-contained port of the same
+  simulation to vanilla HTML/CSS/JS (no build step, no server, no API keys).
+  Deploy it with GitHub Pages: push this repo, then in
+  **Settings → Pages → Build and deployment**, set the source branch and
+  `/docs` as the folder. The demo will be live at
+  `https://<username>.github.io/<repo>/` a minute or two later.
+
+  This file only mirrors the *reference* Python implementation for a
+  zero-infrastructure, clickable demo — the canonical logic lives in the
+  `.py` files above. It intentionally leaves out the optional LLM tie-break
+  from `policy.py`: shipping an API key in client-side JS on a public page
+  isn't safe, so the browser version runs on the learned heuristic policy
+  alone. A server-side deployment (e.g. the Streamlit or Flask route) is
+  the place to wire the LLM piece back in.
