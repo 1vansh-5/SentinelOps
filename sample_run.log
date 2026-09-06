@@ -1,0 +1,61 @@
+SentinelOps Demo — Adaptive Agent vs Static Runbook
+(60 ticks, 4 services, identical injected-incident schedule, seed=7)
+
+=== SentinelOps-Adaptive ===
+  Incidents encountered:       48
+  Resolved without escalation: 45 (93.8%)
+  Escalated to a human:        3 (6.2%)
+  Avg. actions per incident:   1.48
+  Ticks spent in SLA violation:124
+
+=== Static-Runbook-Baseline ===
+  Incidents encountered:       20
+  Resolved without escalation: 12 (60.0%)
+  Escalated to a human:        8 (40.0%)
+  Avg. actions per incident:   1.00
+  Ticks spent in SLA violation:190
+
+>> Self-resolution rate improvement from agentic loop: 33.8 percentage points
+>> SLA-violation ticks avoided: 66
+
+--- Adaptive agent trace (first 40 lines) ---
+  t=1 [checkout-svc] OBSERVE sig=('T', 'F', 'T', 'T', 'F', 'T') incident~'ddos_attack' -> DECIDE 'block_ip' (highest learned success rate (0.60))
+  t=1 [checkout-svc] ACT 'block_ip' executed=True -> EVALUATE: RESOLVED
+  t=1 [notifications-svc] OBSERVE sig=('F', 'T', 'T', 'F', 'F', 'F') incident~'memory_leak' -> DECIDE 'restart_service' (highest learned success rate (0.50))
+  t=1 [notifications-svc] ACT 'restart_service' executed=True -> EVALUATE: RESOLVED
+  t=2 [search-svc] OBSERVE sig=('F', 'T', 'T', 'T', 'F', 'F') incident~'memory_leak' -> DECIDE 'restart_service' (highest learned success rate (0.15))
+  t=2 [search-svc] ACT 'restart_service' executed=True -> EVALUATE: RESOLVED
+  t=3 [search-svc] OBSERVE sig=('T', 'F', 'T', 'T', 'F', 'T') incident~'ddos_attack' -> DECIDE 'scale_up' (exploring to improve estimate)
+  t=3 [search-svc] ACT 'scale_up' executed=True -> EVALUATE: RESOLVED
+  t=3 [notifications-svc] OBSERVE sig=('F', 'F', 'F', 'T', 'F', 'T') incident~'credential_stuffing' -> DECIDE 'rotate_credentials' (highest learned success rate (0.60))
+  t=3 [notifications-svc] ACT 'rotate_credentials' executed=True -> EVALUATE: RESOLVED
+  t=6 [search-svc] OBSERVE sig=('F', 'F', 'F', 'T', 'F', 'T') incident~'credential_stuffing' -> DECIDE 'rotate_credentials' (highest learned success rate (0.74))
+  t=6 [search-svc] ACT 'rotate_credentials' executed=True -> EVALUATE: RESOLVED
+  t=7 [checkout-svc] OBSERVE sig=('T', 'F', 'T', 'T', 'F', 'T') incident~'ddos_attack' -> DECIDE 'block_ip' (highest learned success rate (0.74))
+  t=7 [checkout-svc] ACT 'block_ip' executed=True -> EVALUATE: partial improvement
+  t=7 [search-svc] OBSERVE sig=('F', 'T', 'T', 'F', 'F', 'F') incident~'memory_leak' -> DECIDE 'restart_service' (highest learned success rate (0.68))
+  t=7 [search-svc] ACT 'restart_service' executed=True -> EVALUATE: RESOLVED
+  t=8 [auth-api] OBSERVE sig=('F', 'T', 'T', 'T', 'F', 'F') incident~'cascading_dependency_failure' -> DECIDE 'restart_service' (highest learned success rate (0.45))
+  t=8 [auth-api] ACT 'restart_service' executed=True -> EVALUATE: no improvement
+  t=8 [checkout-svc] OBSERVE sig=('F', 'F', 'T', 'T', 'F', 'T') incident~'ddos_attack' -> DECIDE 'restart_service' (highest learned success rate (0.15))
+  t=8 [checkout-svc] ACT 'restart_service' executed=True -> EVALUATE: no improvement
+  t=8 [notifications-svc] OBSERVE sig=('F', 'F', 'T', 'T', 'F', 'F') incident~'crashed_service' -> DECIDE 'rollback_deploy' (highest learned success rate (0.60))
+  t=8 [notifications-svc] ACT 'rollback_deploy' executed=True -> EVALUATE: RESOLVED
+  t=9 [auth-api] OBSERVE sig=('F', 'T', 'T', 'T', 'F', 'F') incident~'cascading_dependency_failure' -> DECIDE 'scale_up' (highest learned success rate (0.15))
+  t=9 [auth-api] ACT 'scale_up' executed=True -> EVALUATE: RESOLVED
+  t=9 [checkout-svc] OBSERVE sig=('F', 'F', 'T', 'T', 'F', 'T') incident~'ddos_attack' -> DECIDE 'scale_up' (highest learned success rate (0.15))
+  t=9 [checkout-svc] ACT 'scale_up' executed=True -> EVALUATE: no improvement
+  t=10 [checkout-svc] OBSERVE sig=('F', 'F', 'T', 'T', 'F', 'T') incident~'ddos_attack' -> DECIDE 'clear_cache' (highest learned success rate (0.15))
+  t=10 [checkout-svc] ACT 'clear_cache' executed=False -> EVALUATE: tool call failed to execute
+  t=10 [notifications-svc] OBSERVE sig=('F', 'T', 'T', 'T', 'F', 'F') incident~'cascading_dependency_failure' -> DECIDE 'scale_up' (highest learned success rate (0.45))
+  t=10 [notifications-svc] ACT 'scale_up' executed=True -> EVALUATE: no improvement
+  t=11 [checkout-svc] OBSERVE sig=('F', 'F', 'T', 'T', 'F', 'T') incident~'ddos_attack' -> DECIDE 'escalate_to_human' (retry budget exhausted)
+  t=11 [checkout-svc] ESCALATE to human after 4 attempt(s)
+  t=11 [notifications-svc] OBSERVE sig=('F', 'T', 'T', 'T', 'F', 'F') incident~'cascading_dependency_failure' -> DECIDE 'restart_service' (highest learned success rate (0.29))
+  t=11 [notifications-svc] ACT 'restart_service' executed=True -> EVALUATE: RESOLVED
+  t=12 [auth-api] OBSERVE sig=('F', 'F', 'F', 'T', 'T', 'F') incident~'disk_full' -> DECIDE 'cleanup_logs' (highest learned success rate (0.70))
+  t=12 [auth-api] ACT 'cleanup_logs' executed=True -> EVALUATE: RESOLVED
+  t=12 [notifications-svc] OBSERVE sig=('F', 'T', 'T', 'T', 'F', 'F') incident~'cascading_dependency_failure' -> DECIDE 'restart_service' (highest learned success rate (0.54))
+  t=12 [notifications-svc] ACT 'restart_service' executed=True -> EVALUATE: RESOLVED
+  t=13 [search-svc] OBSERVE sig=('F', 'T', 'T', 'T', 'F', 'F') incident~'cascading_dependency_failure' -> DECIDE 'restart_service' (highest learned success rate (0.70))
+  t=13 [search-svc] ACT 'restart_service' executed=True -> EVALUATE: no improvement
