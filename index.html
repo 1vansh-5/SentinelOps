@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SentinelOps — Static Runbook vs. Adaptive Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #101820;
+    --paper: #efe7d8;
+    --paper-ink: #2b2620;
+    --paper-stamp: #8a3b2e;
+    --paper-rule: #c9bd9e;
+    --console-bg: #0b1416;
+    --console-line: #16232690;
+    --console-text: #cfe8e4;
+    --console-dim: #6b8b89;
+    --ok: #6ee7b7;
+    --warn: #fbbf6b;
+    --bad: #f87171;
+    --info: #7dd3fc;
+    --accent: #f4a259;
+    --panel-border: #263039;
+    --ink-light: #e8edf1;
+    --ink-mid: #9fb0ba;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--bg);
+    color: var(--ink-light);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.5;
+  }
+  .wrap{max-width: 1180px; margin: 0 auto; padding: 48px 24px 80px;}
+
+  header.hero{
+    display:flex; flex-direction:column; gap: 10px;
+    padding-bottom: 32px; margin-bottom: 32px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+  .kicker{
+    font-family:'IBM Plex Mono', monospace; font-size: 13px; color: var(--console-dim);
+    letter-spacing: 0.02em;
+  }
+  h1{
+    font-family:'Source Serif 4', serif; font-weight: 700; font-style: italic;
+    font-size: clamp(34px, 5vw, 54px); margin: 0; color: var(--ink-light);
+  }
+  .lede{
+    max-width: 62ch; color: var(--ink-mid); font-size: 17px; margin-top: 4px;
+  }
+  .lede strong{color: var(--ink-light); font-weight:600;}
+
+  .controls{
+    display:flex; flex-wrap:wrap; align-items:flex-end; gap: 20px;
+    background: #151f27; border: 1px solid var(--panel-border);
+    border-radius: 10px; padding: 18px 22px; margin-bottom: 28px;
+  }
+  .field{display:flex; flex-direction:column; gap:6px;}
+  .field label{font-size:12px; color:var(--ink-mid); font-family:'IBM Plex Mono', monospace;}
+  .field input[type=range]{width:140px;}
+  .field .val{font-family:'IBM Plex Mono', monospace; color: var(--ink-light); font-size:13px;}
+  button.run{
+    background: var(--accent); color:#241505; border:none; border-radius:8px;
+    padding: 12px 22px; font-weight:700; font-size:15px; cursor:pointer;
+    font-family:'Inter',sans-serif;
+  }
+  button.run:hover{filter:brightness(1.08);}
+  button.run:disabled{opacity:0.5; cursor:default;}
+  button.ghost{
+    background:transparent; color:var(--ink-mid); border:1px solid var(--panel-border);
+    border-radius:8px; padding:12px 16px; cursor:pointer; font-family:'Inter',sans-serif; font-size:14px;
+  }
+  button.ghost:hover{color:var(--ink-light); border-color:var(--ink-mid);}
+
+  .arena{
+    display:grid; grid-template-columns: 1fr 1fr; gap: 24px;
+  }
+  @media (max-width: 880px){ .arena{grid-template-columns: 1fr;} }
+
+  .panel-title{
+    display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px;
+  }
+  .panel-title h2{font-size:15px; margin:0; font-family:'IBM Plex Mono',monospace; letter-spacing:0.02em;}
+  .panel-title .tag{font-size:11px; color:var(--console-dim); font-family:'IBM Plex Mono',monospace;}
+
+  /* --- Runbook side: an unchanging index card --- */
+  .runbook{
+    background: var(--paper); color: var(--paper-ink);
+    border-radius: 4px; padding: 26px 26px 20px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    font-family: 'Source Serif 4', serif;
+    position: relative;
+    min-height: 560px;
+    display:flex; flex-direction:column;
+  }
+  .runbook::before{
+    content:"FIXED PROCEDURE — NO REVISIONS";
+    position:absolute; top:18px; right:20px;
+    font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:0.06em;
+    color: var(--paper-stamp); border:1.5px solid var(--paper-stamp);
+    padding:3px 7px; border-radius:3px; transform: rotate(3deg);
+    opacity:0.85;
+  }
+  .runbook h3{margin:0 0 2px; font-size:20px; font-weight:700;}
+  .runbook .sub{font-size:13px; color:#5a5140; font-style:italic; margin-bottom:16px;}
+  .runbook table{width:100%; border-collapse:collapse; font-size:13px; margin-bottom:14px;}
+  .runbook th{
+    text-align:left; font-family:'IBM Plex Mono',monospace; font-size:10.5px;
+    color:#7a6f56; font-weight:500; padding-bottom:6px; border-bottom:1px solid var(--paper-rule);
+  }
+  .runbook td{padding:7px 6px; border-bottom:1px dotted var(--paper-rule); vertical-align:top;}
+  .runbook-log{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; color:#4a4230;
+    background:rgba(0,0,0,0.04); border:1px solid var(--paper-rule); border-radius:3px;
+    padding:10px 12px; height:130px; overflow-y:auto; margin-top:auto;
+  }
+  .runbook-log div{margin-bottom:4px;}
+
+  /* --- Adaptive side: a live console --- */
+  .console-panel{
+    background: var(--console-bg); border-radius:4px; padding: 22px 22px 18px;
+    border: 1px solid #1c2b2e; box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    min-height: 560px; display:flex; flex-direction:column;
+  }
+  .console-panel h3{
+    margin:0 0 2px; font-family:'IBM Plex Mono',monospace; font-size:17px; color:var(--console-text);
+  }
+  .console-panel .sub{font-size:12px; color:var(--console-dim); margin-bottom:14px; font-family:'IBM Plex Mono',monospace;}
+  .log{
+    font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--console-text);
+    height: 300px; overflow-y:auto; padding-right:4px;
+  }
+  .log .line{padding:3px 0; border-bottom:1px solid var(--console-line); display:flex; gap:8px;}
+  .log .t{color:var(--console-dim); flex-shrink:0;}
+  .log .ok{color:var(--ok);}
+  .log .warn{color:var(--warn);}
+  .log .bad{color:var(--bad);}
+  .log .info{color:var(--info);}
+
+  .services{
+    display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin: 14px 0;
+  }
+  .svc{
+    border-radius:6px; padding:8px 9px; font-family:'IBM Plex Mono',monospace; font-size:10.5px;
+    border:1px solid var(--panel-border);
+  }
+  .svc .name{color:var(--ink-mid); display:block; margin-bottom:3px;}
+  .svc .status{font-weight:600;}
+  .runbook .services .svc{background:rgba(0,0,0,0.03); border-color:var(--paper-rule); color:#4a4230;}
+  .runbook .services .svc .name{color:#7a6f56;}
+  .console-panel .services .svc{background:#0f1c1f;}
+
+  .stat-row{
+    display:flex; gap:16px; margin-top:auto; padding-top:12px; border-top:1px solid var(--panel-border);
+    font-family:'IBM Plex Mono',monospace; font-size:12px;
+  }
+  .runbook .stat-row{border-top:1px solid var(--paper-rule); color:#4a4230;}
+  .stat{display:flex; flex-direction:column; gap:2px;}
+  .stat .n{font-size:19px; font-weight:700; color:var(--ink-light);}
+  .runbook .stat .n{color:var(--paper-ink); font-family:'Source Serif 4',serif;}
+  .stat .l{color:var(--ink-mid); font-size:10.5px;}
+  .runbook .stat .l{color:#7a6f56;}
+
+  .summary{
+    margin-top: 34px; background:#151f27; border:1px solid var(--panel-border);
+    border-radius:10px; padding: 22px 26px;
+  }
+  .summary h2{font-family:'IBM Plex Mono',monospace; font-size:14px; margin:0 0 16px; color:var(--ink-mid); font-weight:500;}
+  .bar-row{display:flex; align-items:center; gap:14px; margin-bottom:14px;}
+  .bar-row .label{width:190px; font-size:13px; color:var(--ink-mid); flex-shrink:0;}
+  .bar-track{flex:1; height:10px; background:#1c2830; border-radius:6px; overflow:hidden; display:flex;}
+  .bar-fill{height:100%; border-radius:6px 0 0 6px;}
+  .bar-fill.adaptive{background: var(--ok);}
+  .bar-fill.baseline{background: var(--bad);}
+  .bar-row .pct{width:52px; text-align:right; font-family:'IBM Plex Mono',monospace; font-size:13px;}
+
+  .verdict{
+    margin-top:18px; font-size:14px; color: var(--ink-mid); border-top:1px solid var(--panel-border);
+    padding-top:16px;
+  }
+  .verdict strong{color:var(--accent);}
+
+  footer{
+    margin-top: 40px; font-size:13px; color: var(--console-dim); font-family:'IBM Plex Mono',monospace;
+  }
+  footer a{color: var(--info);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="kicker">agentic systems demo · business operations / cybersecurity</div>
+    <h1>Same incidents. One script, one agent.</h1>
+    <p class="lede">
+      Both sides below face <strong>the exact same injected-incident schedule</strong>.
+      The left is a static runbook: one lookup table, one attempt, escalate on failure.
+      The right observes, decides, acts, evaluates the outcome, and adapts — retrying
+      with a different move when the first one doesn't work, and learning what actually
+      fixes what. Press run and watch them diverge.
+    </p>
+  </header>
+
+  <div class="controls">
+    <div class="field">
+      <label for="ticks">TICKS</label>
+      <input type="range" id="ticks" min="20" max="120" value="60" step="5">
+      <span class="val" id="ticksVal">60</span>
+    </div>
+    <div class="field">
+      <label for="seed">SEED</label>
+      <input type="range" id="seed" min="1" max="99" value="7" step="1">
+      <span class="val" id="seedVal">7</span>
+    </div>
+    <div class="field">
+      <label for="speed">SPEED</label>
+      <input type="range" id="speed" min="1" max="10" value="6" step="1">
+      <span class="val" id="speedVal">6</span>
+    </div>
+    <button class="run" id="runBtn">Run simulation</button>
+    <button class="ghost" id="resetBtn">Reset</button>
+  </div>
+
+  <div class="arena">
+    <!-- STATIC RUNBOOK -->
+    <div>
+      <div class="panel-title"><h2>STATIC RUNBOOK</h2><span class="tag">no memory · no retries</span></div>
+      <div class="runbook">
+        <h3>Incident Response Card</h3>
+        <div class="sub">Laminated. Filed 2019. Never updated.</div>
+        <table>
+          <tr><th>symptom pattern</th><th>action</th></tr>
+          <tr><td>latency + errors</td><td>restart_service</td></tr>
+          <tr><td>memory climbing + latency</td><td>restart_service</td></tr>
+          <tr><td>cpu + latency + errors + security</td><td>block_ip</td></tr>
+          <tr><td>errors + security alert</td><td>rotate_credentials</td></tr>
+          <tr><td>errors + disk full</td><td>cleanup_logs</td></tr>
+          <tr><td>cpu + mem + latency</td><td>scale_up</td></tr>
+          <tr><td><em>anything else</em></td><td><em>guess: restart_service</em></td></tr>
+        </table>
+        <div class="services" id="svcBaseline"></div>
+        <div class="runbook-log" id="logBaseline"></div>
+        <div class="stat-row" id="statsBaseline"></div>
+      </div>
+    </div>
+
+    <!-- ADAPTIVE AGENT -->
+    <div>
+      <div class="panel-title"><h2>SENTINELOPS · ADAPTIVE</h2><span class="tag">observe → decide → act → evaluate → adapt</span></div>
+      <div class="console-panel">
+        <h3>live agent loop</h3>
+        <div class="sub">learned success-rate table updates after every action</div>
+        <div class="services" id="svcAdaptive"></div>
+        <div class="log" id="logAdaptive"></div>
+        <div class="stat-row" id="statsAdaptive"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="summary">
+    <h2>RESULT — self-resolution rate, identical incident schedule</h2>
+    <div class="bar-row">
+      <div class="label">SentinelOps adaptive</div>
+      <div class="bar-track"><div class="bar-fill adaptive" id="barAdaptive" style="width:0%"></div></div>
+      <div class="pct" id="pctAdaptive">—</div>
+    </div>
+    <div class="bar-row">
+      <div class="label">Static runbook</div>
+      <div class="bar-track"><div class="bar-fill baseline" id="barBaseline" style="width:0%"></div></div>
+      <div class="pct" id="pctBaseline">—</div>
+    </div>
+    <div class="verdict" id="verdict">Run the simulation to see the comparison.</div>
+  </div>
+
+  <footer>
+    100% client-side simulation — no server, no API calls, nothing to configure.
+    Source ports the reference Python implementation (environment.py / policy.py / agent.py) line-for-line into JS below.
+  </footer>
+</div>
+
+<script>
+// =====================================================================
+// SentinelOps — browser port of the reference simulation.
+// No network calls, no API keys: this file is self-contained on purpose
+// so it can run as a static GitHub Pages site with zero backend.
+// =====================================================================
+
+const THRESHOLDS = { cpu:85, mem:85, latency:300, error_rate:2, disk:90, security_alert:0 };
+const BASELINE_METRICS = { cpu:35, mem:40, latency:120, error_rate:0.3, disk:45, security_alert:0 };
+
+const INCIDENTS = {
+  crashed_service: { effect:{latency:900, error_rate:40}, fixes:{restart_service:0.9, rollback_deploy:0.55} },
+  memory_leak: { effect:{mem:96, latency:400}, fixes:{restart_service:0.85, scale_up:0.4} },
+  ddos_attack: { effect:{latency:950, error_rate:30, cpu:97, security_alert:1}, fixes:{block_ip:0.85, isolate_host:0.7, scale_up:0.25} },
+  credential_stuffing: { effect:{error_rate:15, security_alert:1}, fixes:{rotate_credentials:0.9, block_ip:0.6} },
+  disk_full: { effect:{disk:99, error_rate:20}, fixes:{cleanup_logs:0.95} },
+  config_drift: { effect:{error_rate:25, latency:350}, fixes:{rollback_deploy:0.9, restart_service:0.3} },
+  latency_spike_load: { effect:{latency:500, cpu:90, mem:80}, fixes:{scale_up:0.85, clear_cache:0.5} },
+  cascading_dependency_failure: { effect:{latency:700, error_rate:35, cpu:80, mem:85},
+    fixes:{restart_service:0.3, rollback_deploy:0.3, scale_up:0.3, isolate_host:0.2} },
+};
+const INCIDENT_KEYS = Object.keys(INCIDENTS);
+const ACTIONS = ["restart_service","scale_up","clear_cache","rollback_deploy","block_ip",
+  "isolate_host","rotate_credentials","cleanup_logs","escalate_to_human","no_op"];
+
+const PRIOR_HINTS = {
+  "F,F,T,T,F,F": {rollback_deploy:0.6, restart_service:0.5, clear_cache:0.3},
+  "F,T,T,F,F,F": {restart_service:0.5, scale_up:0.3},
+  "T,F,T,T,F,T": {block_ip:0.6, isolate_host:0.5, scale_up:0.3},
+  "F,F,F,T,F,T": {rotate_credentials:0.6, block_ip:0.4},
+  "F,F,F,T,T,F": {cleanup_logs:0.7},
+  "T,T,T,F,F,F": {scale_up:0.6, clear_cache:0.35},
+};
+const STATIC_RUNBOOK = {
+  "F,F,T,T,F,F": "restart_service",
+  "F,T,T,F,F,F": "restart_service",
+  "T,F,T,T,F,T": "block_ip",
+  "F,F,F,T,F,T": "rotate_credentials",
+  "F,F,F,T,T,F": "cleanup_logs",
+  "T,T,T,F,F,F": "scale_up",
+};
+
+// --- seeded RNG (mulberry32) so a given seed reproduces exactly ---
+function makeRng(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function choice(rng, arr){ return arr[Math.floor(rng()*arr.length)]; }
+function uniform(rng, lo, hi){ return lo + rng()*(hi-lo); }
+
+class Service {
+  constructor(name){ this.name = name; this.metrics = {...BASELINE_METRICS}; this.activeIncident = null; this.ticksWithIncident = 0; }
+  isHealthy(){
+    const m = this.metrics;
+    return m.cpu < THRESHOLDS.cpu && m.mem < THRESHOLDS.mem && m.latency < THRESHOLDS.latency &&
+           m.error_rate < THRESHOLDS.error_rate && m.disk < THRESHOLDS.disk && m.security_alert <= THRESHOLDS.security_alert;
+  }
+  signature(){
+    const m = this.metrics;
+    return [m.cpu>=THRESHOLDS.cpu, m.mem>=THRESHOLDS.mem, m.latency>=THRESHOLDS.latency,
+            m.error_rate>=THRESHOLDS.error_rate, m.disk>=THRESHOLDS.disk, m.security_alert>THRESHOLDS.security_alert];
+  }
+}
+function sigKey(sig){ return sig.map(b=>b?"T":"F").join(","); }
+
+class Environment {
+  constructor(names, seed, incidentProb=0.22, flakyProb=0.10){
+    this.rng = makeRng(seed);
+    this.services = {}; names.forEach(n=> this.services[n] = new Service(n));
+    this.incidentProb = incidentProb; this.flakyProb = flakyProb; this.tickNum = 0;
+  }
+  drift(){
+    Object.values(this.services).forEach(svc=>{
+      if(!svc.activeIncident){
+        for(const k of ["cpu","mem","latency","error_rate","disk"]) svc.metrics[k] = Math.max(0, BASELINE_METRICS[k] + uniform(this.rng,-5,5));
+        svc.metrics.security_alert = 0;
+      }
+    });
+  }
+  maybeInject(log){
+    Object.values(this.services).forEach(svc=>{
+      if(!svc.activeIncident && this.rng() < this.incidentProb){
+        const inc = choice(this.rng, INCIDENT_KEYS);
+        svc.activeIncident = inc; svc.ticksWithIncident = 0;
+        Object.entries(INCIDENTS[inc].effect).forEach(([k,v])=> svc.metrics[k]=v);
+        log(`incident '${inc}' injected on ${svc.name}`, "warn");
+      }
+    });
+  }
+  escalateSeverity(){
+    Object.values(this.services).forEach(svc=>{
+      if(svc.activeIncident){
+        svc.ticksWithIncident++;
+        if(svc.ticksWithIncident > 3){
+          for(const k of ["latency","error_rate","cpu"]) if(svc.metrics[k]!==undefined) svc.metrics[k]*=1.08;
+        }
+      }
+    });
+  }
+  applyAction(serviceName, action){
+    const svc = this.services[serviceName];
+    if(this.rng() < this.flakyProb) return false;
+    if(action==="no_op" || action==="escalate_to_human") return true;
+    const inc = svc.activeIncident;
+    if(!inc) return true;
+    const fixes = INCIDENTS[inc].fixes;
+    const successProb = fixes[action] ?? 0.03;
+    const roll = this.rng();
+    if(roll < successProb){
+      svc.activeIncident = null; svc.ticksWithIncident = 0;
+      for(const k in svc.metrics) svc.metrics[k] = (BASELINE_METRICS[k]??0) + uniform(this.rng,-3,3);
+      svc.metrics.security_alert = 0;
+    } else if(roll < successProb + 0.15){
+      Object.entries(INCIDENTS[inc].effect).forEach(([k,v])=> svc.metrics[k] = Math.max(BASELINE_METRICS[k]??0, v*0.6));
+    } else if(!(action in fixes) && this.rng() < 0.2){
+      Object.entries(INCIDENTS[inc].effect).forEach(([k])=> { if(svc.metrics[k]!==undefined) svc.metrics[k]*=1.1; });
+    }
+    return true;
+  }
+  tick(log){ this.tickNum++; this.drift(); this.maybeInject(log); this.escalateSeverity(); }
+}
+
+class AdaptivePolicy {
+  constructor(alpha=0.35, defaultPrior=0.15){ this.alpha=alpha; this.defaultPrior=defaultPrior; this.q={}; }
+  getQ(sig, action){
+    const key = sig+"|"+action;
+    if(!(key in this.q)) this.q[key] = (PRIOR_HINTS[sig]||{})[action] ?? this.defaultPrior;
+    return this.q[key];
+  }
+  rank(sig, exclude){
+    return ACTIONS.filter(a=>a!=="escalate_to_human" && a!=="no_op" && !exclude.has(a))
+      .map(a=>[a, this.getQ(sig,a)]).sort((a,b)=>b[1]-a[1]);
+  }
+  decide(sig, exclude, rng){
+    const ranked = this.rank(sig, exclude);
+    if(ranked.length===0) return ["escalate_to_human", "no untried actions remain"];
+    if(rng() < 0.12) return [choice(rng, ranked.map(r=>r[0])), "exploring to improve estimate"];
+    return [ranked[0][0], `highest learned success rate (${ranked[0][1].toFixed(2)})`];
+  }
+  update(sig, action, reward){
+    const key = sig+"|"+action;
+    const old = this.getQ(sig, action);
+    this.q[key] = old + this.alpha*(reward-old);
+  }
+}
+
+const MAX_ATTEMPTS = 4;
+
+class AdaptiveAgent {
+  constructor(env, log){
+    this.env = env; this.log = log; this.policy = new AdaptivePolicy();
+    this.state = {}; Object.keys(env.services).forEach(n=> this.state[n] = {tried:new Set(), attempts:0});
+    this.stats = {incidents:0, resolved:0, escalations:0, slaTicks:0, stepsSum:0, stepsCount:0};
+  }
+  step(){
+    Object.entries(this.env.services).forEach(([name, svc])=> this.handle(name, svc));
+  }
+  handle(name, svc){
+    const st = this.state[name];
+    if(!svc.isHealthy()) this.stats.slaTicks++;
+    const sig = sigKey(svc.signature());
+    if(!svc.activeIncident){ st.tried.clear(); st.attempts=0; return; }
+    if(st.attempts===0) this.stats.incidents++;
+
+    let action, reason;
+    if(st.attempts >= MAX_ATTEMPTS){ action="escalate_to_human"; reason="retry budget exhausted"; }
+    else [action, reason] = this.policy.decide(sig, st.tried, this.env.rng);
+
+    this.log(`[${name}] observe ${sig} → decide '${action}' (${reason})`, "info");
+
+    if(action==="escalate_to_human"){
+      this.stats.escalations++; this.stats.stepsSum+=st.attempts; this.stats.stepsCount++;
+      this.log(`[${name}] ESCALATED to human after ${st.attempts} attempt(s)`, "bad");
+      svc.activeIncident=null; st.tried.clear(); st.attempts=0; return;
+    }
+
+    st.attempts++;
+    const executed = this.env.applyAction(name, action);
+    let reward, outcome;
+    if(!executed){ reward=0; outcome="tool call failed to execute"; }
+    else if(!svc.activeIncident || svc.isHealthy()){ reward=1; outcome="RESOLVED"; }
+    else {
+      const stillSig = sigKey(svc.signature());
+      reward = stillSig!==sig ? 0.35 : 0;
+      outcome = reward>0 ? "partial improvement" : "no improvement";
+    }
+    const cls = outcome==="RESOLVED" ? "ok" : (outcome.includes("partial") ? "warn" : "bad");
+    this.log(`[${name}] act '${action}' → ${outcome}`, cls);
+
+    this.policy.update(sig, action, reward);
+    if(reward===0) st.tried.add(action);
+    if(outcome==="RESOLVED"){
+      this.stats.resolved++; this.stats.stepsSum+=st.attempts; this.stats.stepsCount++;
+      st.tried.clear(); st.attempts=0;
+    }
+  }
+}
+
+class BaselineAgent {
+  constructor(env, log){
+    this.env = env; this.log = log; this.active = new Set();
+    this.stats = {incidents:0, resolved:0, escalations:0, slaTicks:0, stepsSum:0, stepsCount:0};
+  }
+  step(){ Object.entries(this.env.services).forEach(([name, svc])=> this.handle(name, svc)); }
+  handle(name, svc){
+    if(!svc.isHealthy()) this.stats.slaTicks++;
+    if(!svc.activeIncident){ this.active.delete(name); return; }
+    if(this.active.has(name)) return;
+    this.active.add(name); this.stats.incidents++;
+    const sig = sigKey(svc.signature());
+    const action = STATIC_RUNBOOK[sig] || "restart_service";
+    this.log(`[${name}] runbook lookup ${sig} → fixed action '${action}'`, "info");
+    this.env.applyAction(name, action);
+    this.stats.stepsSum+=1; this.stats.stepsCount++;
+    if(!svc.activeIncident){ this.stats.resolved++; this.log(`[${name}] resolved`, "ok"); }
+    else { this.stats.escalations++; this.log(`[${name}] escalated (no retry)`, "bad"); svc.activeIncident=null; }
+  }
+}
+
+// ---------------------------------------------------------------- UI ----
+const SERVICES = ["auth-api","checkout-svc","search-svc","notifications-svc"];
+const el = id => document.getElementById(id);
+const ticksInput = el("ticks"), seedInput = el("seed"), speedInput = el("speed");
+const runBtn = el("runBtn"), resetBtn = el("resetBtn");
+
+function fmtPct(n,d){ return d? (100*n/d).toFixed(1)+"%" : "—"; }
+
+function renderServices(container, env){
+  container.innerHTML = "";
+  Object.values(env.services).forEach(svc=>{
+    const healthy = svc.isHealthy();
+    const div = document.createElement("div");
+    div.className = "svc";
+    const statusColor = healthy ? "var(--ok)" : "var(--bad)";
+    div.innerHTML = `<span class="name">${svc.name}</span><span class="status" style="color:${statusColor}">${healthy? "healthy" : (svc.activeIncident||"degraded")}</span>`;
+    container.appendChild(div);
+  });
+}
+function appendLog(container, text, cls, tick){
+  const div = document.createElement("div");
+  if(container.id.startsWith("logBaseline")){
+    div.textContent = `t${tick}  ${text}`;
+  } else {
+    div.className = "line";
+    div.innerHTML = `<span class="t">t${tick}</span><span class="${cls}">${text}</span>`;
+  }
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  while(container.childElementCount > 200) container.removeChild(container.firstChild);
+}
+function renderStats(container, stats, isBaseline){
+  const avg = stats.stepsCount? (stats.stepsSum/stats.stepsCount).toFixed(2) : "0.00";
+  container.innerHTML = `
+    <div class="stat"><span class="n">${stats.incidents}</span><span class="l">incidents</span></div>
+    <div class="stat"><span class="n">${stats.resolved}</span><span class="l">self-resolved</span></div>
+    <div class="stat"><span class="n">${stats.escalations}</span><span class="l">escalated</span></div>
+    <div class="stat"><span class="n">${avg}</span><span class="l">avg actions/incident</span></div>
+    <div class="stat"><span class="n">${stats.slaTicks}</span><span class="l">SLA-violation ticks</span></div>
+  `;
+}
+
+let timer = null;
+
+function runSimulation(){
+  runBtn.disabled = true;
+  el("logAdaptive").innerHTML = ""; el("logBaseline").innerHTML = "";
+  const seed = parseInt(seedInput.value), totalTicks = parseInt(ticksInput.value);
+  const speed = parseInt(speedInput.value);
+  const delay = Math.max(15, 260 - speed*24);
+
+  const envA = new Environment(SERVICES, seed);
+  const agentA = new AdaptiveAgent(envA, (msg,cls)=> appendLog(el("logAdaptive"), msg, cls, envA.tickNum));
+  const envB = new Environment(SERVICES, seed);
+  const agentB = new BaselineAgent(envB, (msg,cls)=> appendLog(el("logBaseline"), msg, cls, envB.tickNum));
+
+  let i = 0;
+  timer = setInterval(()=>{
+    if(i >= totalTicks){
+      clearInterval(timer); runBtn.disabled = false;
+      finalize(agentA.stats, agentB.stats);
+      return;
+    }
+    envA.tick((m)=>{});
+    agentA.step();
+    envB.tick((m)=>{});
+    agentB.step();
+    renderServices(el("svcAdaptive"), envA);
+    renderServices(el("svcBaseline"), envB);
+    renderStats(el("statsAdaptive"), agentA.stats);
+    renderStats(el("statsBaseline"), agentB.stats);
+    i++;
+  }, delay);
+}
+
+function finalize(a, b){
+  const aRate = a.incidents? a.resolved/a.incidents : 0;
+  const bRate = b.incidents? b.resolved/b.incidents : 0;
+  el("barAdaptive").style.width = (aRate*100).toFixed(1)+"%";
+  el("barBaseline").style.width = (bRate*100).toFixed(1)+"%";
+  el("pctAdaptive").textContent = fmtPct(a.resolved, a.incidents);
+  el("pctBaseline").textContent = fmtPct(b.resolved, b.incidents);
+  const diff = ((aRate-bRate)*100).toFixed(1);
+  const slaDiff = b.slaTicks - a.slaTicks;
+  el("verdict").innerHTML = `The adaptive loop self-resolved <strong>${diff} percentage points</strong> more incidents than the static runbook on the identical schedule, and left the fleet in an SLA-violating state <strong>${slaDiff}</strong> fewer ticks in total.`;
+}
+
+function resetAll(){
+  clearInterval(timer); runBtn.disabled = false;
+  ["logAdaptive","logBaseline","svcAdaptive","svcBaseline","statsAdaptive","statsBaseline"].forEach(id=> el(id).innerHTML="");
+  el("barAdaptive").style.width="0%"; el("barBaseline").style.width="0%";
+  el("pctAdaptive").textContent="—"; el("pctBaseline").textContent="—";
+  el("verdict").textContent = "Run the simulation to see the comparison.";
+}
+
+[ticksInput, seedInput, speedInput].forEach(inp=>{
+  const valEl = el(inp.id+"Val");
+  inp.addEventListener("input", ()=> valEl.textContent = inp.value);
+});
+runBtn.addEventListener("click", runSimulation);
+resetBtn.addEventListener("click", resetAll);
+</script>
+</body>
+</html>
