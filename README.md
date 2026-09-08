@@ -129,4 +129,6 @@ most (novel or compound failures). The agent loop is what buys resilience.
   isn't safe, so the browser version runs on the learned heuristic policy
   alone. A server-side deployment (e.g. the Streamlit or Flask route) is
   the place to wire the LLM piece back in.
+
+  
 Check The Go to Market file to see how our product id driven to help businesses and to the websites auto repair the problem in a gify.
