@@ -1,134 +1,585 @@
-# SentinelOps — Autonomous Incident Response Agent
+# 🛡️ SentinelOps
 
-**Domain:** Business Operations / Cybersecurity (IT incident response & self-healing infrastructure)
+## Autonomous SOC Investigation & Response Agent
 
-## The problem
+> **The alert label is a hint. It is not the verdict.**
 
-Production services fail in messy, ambiguous ways. A spike in latency could
-mean an overloaded box, a bad deploy, a DDoS attack, or a memory leak —
-the *symptoms* often look alike, the *right fix* doesn't, and the first fix
-you try might not work, might partially work, or might make things worse.
-A human on-call engineer reasons through this iteratively: look at the
-signals, form a hypothesis, try something, check whether it worked, and
-change approach if it didn't — all under time pressure, since unresolved
-incidents get worse the longer they sit.
+SentinelOps is an experimental **AI-assisted Security Operations Center (SOC) agent** that investigates security alerts by correlating evidence from multiple security sources instead of trusting the alert signature alone.
 
-That loop — not a single classification step — is the actual job. This is
-why it's an agentic problem rather than a scripting problem.
+It receives simulated **NIDS / Snort / Suricata alerts**, investigates the targeted asset, checks vulnerability and configuration context, retrieves server-side evidence, determines whether an attack actually succeeded, performs a sandboxed response when justified, verifies the result, and can reconsider its conclusion when new evidence or human feedback appears.
 
-## Why a static script is not enough (and how the demo proves it)
+### Core loop
 
-`agent.py` includes two systems that run against **the exact same injected
-incident schedule** (same random seed) so the comparison is apples-to-apples:
+```text
+🚨 ALERT
+   ↓
+🔎 INVESTIGATE
+   ↓
+🧩 CORRELATE EVIDENCE
+   ↓
+🧠 DETERMINE ATTACK OUTCOME
+   ↓
+🛡️ RESPOND
+   ↓
+✅ VERIFY
+   ↓
+🔄 RECONSIDER / ADAPT
+```
 
-| | Adaptive Agent | Static Runbook (baseline) |
-|---|---|---|
-| Diagnosis | Same symptom→signature classifier | Same symptom→signature classifier |
-| Action choice | Learned success-rate table, updated online | One fixed lookup table |
-| On failure | Retries a *different* action (never repeats a proven failure), up to a budget | Escalates immediately, no retry |
-| Handles novel incidents | Yes — no-prior signatures start at a default score and get learned from outcomes | No — falls through to a generic guess, no way to recover if wrong |
-| Result (60-tick run, seed=7) | **93.8%** self-resolved, 1.48 avg actions/incident | **60.0%** self-resolved, escalates 40% of the time |
+---
 
-Run it yourself:
+## 🎯 The Problem
+
+A security alert does **not** necessarily mean a successful compromise.
+
+For example:
+
+```text
+🚨 Suricata:
+"Log4Shell exploitation attempt detected"
+```
+
+A naive SOC automation system might immediately conclude:
+
+```text
+EXPLOIT ALERT
+      ↓
+BLOCK SOURCE IP
+```
+
+But the alert alone does not answer the important questions:
+
+- Was the target actually vulnerable?
+- Was the exploit request successful?
+- Did the server execute anything?
+- Did authentication succeed?
+- Did the attacker obtain a session?
+- Was the request blocked by a WAF?
+- Was the asset patched?
+- Did suspicious activity occur after the alert?
+- Is the alert a false positive?
+
+SentinelOps treats the alert as the **starting point of an investigation**, not the conclusion.
+
+---
+
+# 🧠 Core Idea
+
+### Don't ask:
+
+> "What does this alert label say?"
+
+### Ask:
+
+> "What evidence do I need to determine what actually happened?"
+
+This changes the workflow from:
+
+```text
+ALERT → ACTION
+```
+
+to:
+
+```text
+ALERT
+  ↓
+EVIDENCE
+  ↓
+CORRELATION
+  ↓
+ASSESSMENT
+  ↓
+RESPONSE
+  ↓
+VERIFICATION
+  ↓
+REASSESSMENT
+```
+
+---
+
+# 🏗️ SOC Architecture
+
+```text
+                     ┌─────────────────────┐
+                     │ NIDS / Snort /       │
+                     │ Suricata Alert      │
+                     └──────────┬──────────┘
+                                │
+                                ▼
+                     ┌─────────────────────┐
+                     │ Alert Normalization │
+                     └──────────┬──────────┘
+                                │
+                                ▼
+                 ┌────────────────────────────┐
+                 │     SentinelOps SOC Agent  │
+                 │                            │
+                 │  Investigation Planner    │
+                 │  Evidence Correlation      │
+                 │  Decision / Policy Engine  │
+                 └─────────────┬──────────────┘
+                               │
+             ┌─────────────────┼─────────────────┐
+             │                 │                 │
+             ▼                 ▼                 ▼
+       🖥️ Asset Data      🐞 Vulnerability   📜 Server Logs
+                           / CVE Context
+             │                 │                 │
+             └─────────────────┼─────────────────┘
+                               │
+                               ▼
+                    ┌────────────────────┐
+                    │ Evidence Assessment│
+                    └─────────┬──────────┘
+                              │
+              ┌───────────────┼────────────────┐
+              ▼               ▼                ▼
+        ❌ ATTACK         ❓ INCONCLUSIVE    ✅ ATTACK
+           FAILED                             SUCCEEDED
+              │               │                │
+              │               ▼                ▼
+              │          👨‍💻 ESCALATE     🛡️ RESPONSE
+              │                                │
+              │                                ▼
+              │                       🚧 SIMULATED FIREWALL
+              │                                │
+              └────────────────┬───────────────┘
+                               ▼
+                         🔍 VERIFY EFFECT
+                               │
+                               ▼
+                       🆕 NEW EVIDENCE?
+                               │
+                               ▼
+                         🔄 RECONSIDER
+```
+
+---
+
+# 🔬 Evidence Sources
+
+SentinelOps correlates multiple simulated security data sources.
+
+### 🚨 NIDS / Suricata / Snort Alerts
+
+Examples include:
+
+- Log4Shell exploitation attempts
+- Apache Struts RCE attempts
+- SQL injection
+- SSH brute force
+- policy/scan events
+
+The alert signature is intentionally treated as **one piece of evidence**, rather than unquestioned truth.
+
+### 🖥️ Asset Inventory
+
+The agent considers:
+
+- target asset
+- exposure
+- criticality
+- software
+- configuration
+- known weaknesses
+
+Example:
+
+```text
+web-app-01
+├── Internet-facing
+├── High criticality
+├── Apache / Struts
+└── Vulnerable to Log4Shell
+```
+
+### 🐞 Vulnerability Context
+
+Synthetic vulnerability/CVE knowledge is used to determine whether an attack is plausible against the targeted asset.
+
+### 📜 Server Evidence
+
+Server-side evidence helps distinguish:
+
+```text
+ATTACK ATTEMPT
+```
+
+from:
+
+```text
+SUCCESSFUL COMPROMISE
+```
+
+Examples include:
+
+- authentication results
+- rejected requests
+- suspicious activity
+- execution indicators
+- outbound activity
+- forensic updates
+
+---
+
+# 🧠 Evidence-Driven Verdicts
+
+SentinelOps can distinguish between different outcomes:
+
+```text
+✅ ATTACK SUCCEEDED
+
+❌ ATTACK FAILED
+
+❓ INCONCLUSIVE
+
+⚠️ FALSE POSITIVE
+```
+
+The important distinction is:
+
+> **Detection ≠ compromise**
+
+An exploit attempt can be detected without the exploit succeeding.
+
+---
+
+# 🛡️ Simulated Response
+
+When the evidence justifies containment, SentinelOps can perform a **simulated firewall block**.
+
+Example:
+
+```text
+Assessment:
+ATTACK SUCCEEDED
+
+Action:
+BLOCK 185.x.x.x
+
+Result:
+Simulated firewall rule created
+
+Verification:
+0 further packets observed
+
+Response:
+CONFIRMED EFFECTIVE
+```
+
+No real production firewall is modified by the browser simulation.
+
+---
+
+# 🔍 Verify, Don't Assume
+
+A response is not considered successful simply because the action was issued.
+
+SentinelOps verifies the environment again.
+
+```text
+BLOCK
+  ↓
+RE-CHECK TRAFFIC
+  ↓
+ANY FURTHER PACKETS?
+  │
+  ├── YES → investigate again
+  │
+  └── NO  → response confirmed
+```
+
+This closes the loop between:
+
+**action → environment → evidence**
+
+---
+
+# 🔄 Reconsideration
+
+Security investigations are not always complete when the first verdict is produced.
+
+New evidence may arrive later.
+
+Example:
+
+```text
+Initial evidence
+      ↓
+INCONCLUSIVE
+      ↓
+Investigation continues
+      ↓
+Delayed forensic evidence
+      ↓
+Outbound data transfer discovered
+      ↓
+ATTACK SUCCEEDED
+      ↓
+Retroactive containment
+```
+
+This allows SentinelOps to change an earlier assessment when the evidence changes.
+
+---
+
+# 👨‍💻 Human Analyst Override
+
+Autonomous systems should not assume they are always correct.
+
+SentinelOps therefore supports analyst feedback.
+
+```text
+                Agent verdict
+                     │
+              ┌──────┴──────┐
+              │             │
+         Analyst agrees  Analyst disagrees
+              │             │
+              ▼             ▼
+           Continue       Override
+                            │
+                  ┌─────────┴─────────┐
+                  ▼                   ▼
+             False Positive       Confirmed Attack
+                  │                   │
+               Unblock             Block
+```
+
+The system can also use the correction as feedback for future evidence weighting.
+
+---
+
+# 🧪 Controlled SOC Simulation
+
+The deployed demonstration is intentionally **100% client-side**.
+
+It does not require:
+
+- a backend
+- an API key
+- a real SIEM
+- a real firewall
+- access to production infrastructure
+
+Instead, it provides a controlled environment for demonstrating the investigation and response logic.
+
+---
+
+# ⚔️ SentinelOps vs Alert-Label Autopilot
+
+The project includes a deliberately simple baseline.
+
+### Alert-Label Autopilot
+
+```text
+EXPLOIT / WEB / TROJAN
+        ↓
+AUTO-BLOCK
+
+POLICY
+        ↓
+LOG ONLY
+
+SCAN
+        ↓
+IGNORE
+```
+
+It makes decisions from the alert label.
+
+### SentinelOps SOC Agent
+
+```text
+ALERT
+ ↓
+TARGET ASSET
+ ↓
+VULNERABILITY CONTEXT
+ ↓
+SERVER EVIDENCE
+ ↓
+CORRELATION
+ ↓
+VERDICT
+ ↓
+RESPONSE
+ ↓
+VERIFICATION
+ ↓
+RECONSIDERATION
+```
+
+Both systems process the **same simulated alert stream**, making the comparison focused on the investigation strategy rather than different inputs.
+
+---
+
+# 📊 What the Demo Measures
+
+The SOC simulation tracks metrics such as:
+
+- 🎯 correct-response rate
+- 🚫 false blocks
+- 🕵️ missed breaches
+- 🛡️ simulated blocks
+- 👨‍💻 analyst escalations
+- 🔄 reconsiderations
+- ✋ human overrides
+
+The goal is not simply to maximize blocking.
+
+A good SOC agent must balance:
+
+```text
+DETECTION
+    +
+INVESTIGATION
+    +
+CONTAINMENT
+    +
+FALSE-POSITIVE CONTROL
+    +
+HUMAN ESCALATION
+```
+
+---
+
+# 🧩 Core Components
+
+| Component | Purpose |
+|---|---|
+| `index.html` | Interactive browser SOC demonstration |
+| `soc_core.js` | Core client-side SOC simulation logic |
+| `agent.py` | Python agent implementation |
+| `environment.py` | Simulated security environment |
+| `policy.py` | Adaptive decision/evidence policy |
+| `reasoner.py` | Reasoning layer |
+| `planner.py` | Investigation/planning logic |
+| `run_demo.py` | Simulation runner |
+| `tools/` | Agent capabilities/tools |
+| `safety/` | Safety and execution constraints |
+| `sample_run.log` | Example execution trace |
+| `Go_to_market.md` | Productization / business direction |
+
+---
+
+# 🔐 Safety Model
+
+SentinelOps is an experimental cybersecurity research and portfolio project.
+
+The current public demonstration operates on **synthetic security events and simulated response actions**.
+
+It does not provide autonomous access to real production infrastructure.
+
+A real deployment would require additional controls including:
+
+- 🔐 authentication
+- 🧑‍⚖️ authorization
+- 🛡️ least-privilege tool permissions
+- 📋 audit logging
+- 🚦 response approval policies
+- 🔄 rollback mechanisms
+- 💥 blast-radius controls
+- 👨‍💻 human escalation
+- 🔎 forensic validation
+
+---
+
+# 🚀 Demo
+
+Run the interactive investigation:
 
 ```bash
 python3 run_demo.py --trace
 ```
 
-The static baseline is not a strawman — it's exactly what a well-intentioned
-`if symptom_pattern == X: run_fix(Y)` runbook looks like. It's deterministic,
-fast, and cheap to build. It also can't get better with experience, can't
-recover from being wrong, and breaks down precisely on the cases that matter
-most (novel or compound failures). The agent loop is what buys resilience.
+The browser demonstration can also be deployed as a static website because the SOC simulation runs entirely client-side.
 
-## Architecture: Observe → Decide → Act → Evaluate → Adapt
+---
 
-```
- ┌────────────┐   symptom signature    ┌─────────────┐
- │ Environment │ ───────────────────▶  │   OBSERVE   │
- │ (simulated  │                        └──────┬──────┘
- │  services,  │                               ▼
- │  metrics,   │                        ┌─────────────┐   learned Q-table +
- │  incidents) │◀── action ─────────────│   DECIDE    │◀─ optional LLM tie-break
- │             │                        └──────┬──────┘   on genuine uncertainty
- │             │                               ▼
- │             │                        ┌─────────────┐
- │             │──── executes action ──▶│    ACT      │
- │             │                        └──────┬──────┘
- │             │   new metrics                 ▼
- │             │◀───────────────────────┌─────────────┐
- └────────────┘                         │  EVALUATE   │
-                                         └──────┬──────┘
-                                                ▼
-                                         ┌─────────────┐
-                                         │   ADAPT     │─▶ updates Q-table,
-                                         └─────────────┘   tabu list, retry count
-```
+# 🗺️ Roadmap
 
-* **`environment.py`** — the world. Services drift, incidents get injected
-  with hidden ground-truth causes, actions succeed/partially-succeed/fail
-  stochastically, and 10% of the time an action call fails to execute at
-  all (simulating a flaky API/infra call the agent must not blindly trust).
-* **`policy.py`** — the learned brain. A table of
-  `(symptom signature, action) → estimated success rate`, seeded with
-  imperfect heuristic priors and updated with a simple exponential-moving-
-  average reward signal after every attempt (lightweight, dependency-free
-  reinforcement learning — no framework required). When two actions are
-  essentially tied, and an `ANTHROPIC_API_KEY` is available, it optionally
-  asks an LLM to reason through the tie using the attempt history; if the
-  key or SDK isn't available, it silently falls back to the learned table.
-* **`agent.py`** — the loop itself (`AdaptiveAgent`), plus the
-  `BaselineAgent` used for comparison.
-* **`run_demo.py`** — runs both agents on identical conditions and reports
-  the comparison.
+## Phase 1 — SOC Investigation
 
-## How each required characteristic shows up
+- [x] Simulated NIDS alerts
+- [x] Snort/Suricata-style signatures
+- [x] Asset inventory
+- [x] Vulnerability context
+- [x] Server evidence
+- [x] Evidence correlation
+- [x] Attack outcome assessment
+- [x] Simulated firewall response
+- [x] Response verification
+- [x] Delayed evidence / reconsideration
+- [x] Human analyst override
 
-- **Goal-Driven Execution** — the agent's objective is fixed and explicit
-  (keep every service inside SLA, minimize escalations and time-to-fix);
-  every decision is judged against that goal, not against a single-shot
-  correctness check.
-- **Dynamic Action Selection** — the action chosen depends on the current
-  learned success-rate table *and* what's already been tried on this
-  specific incident; the same symptom signature can lead to different
-  actions over time as the policy learns, and to an LLM consult only when
-  genuinely ambiguous.
-- **Multi-Step Execution** — a single incident is not "one classify, one
-  fix." The agent retries with a different action if the first doesn't
-  work, up to a bounded retry budget, tracking a per-incident tabu list of
-  what's already failed.
-- **Adaptation** — success/failure of every action updates the policy
-  (`policy.update`) via online reward averaging, so future decisions on
-  similar symptoms shift toward what has actually worked — including on
-  the deliberately novel `cascading_dependency_failure` incident type that
-  has *no* hand-written prior at all.
-- **Robustness** — the loop tolerates: actions that silently fail to
-  execute (flaky infra), incidents that get worse the longer they're left
-  untreated, symptom signatures never seen before, and an unavailable/failed
-  LLM call (never crashes — always degrades to the learned heuristic table
-  and, as a last resort, escalation to a human rather than looping forever).
+## Phase 2 — Real SOC Integrations
 
-## Files
+- [ ] Real Suricata ingestion
+- [ ] Zeek integration
+- [ ] Wazuh integration
+- [ ] SIEM event ingestion
+- [ ] Real CVE/NVD enrichment
+- [ ] Threat-intelligence enrichment
+- [ ] Persistent incident database
 
-- `environment.py` — simulated infrastructure and incident ground truth
-- `policy.py` — adaptive decision policy (+ optional LLM tie-break)
-- `agent.py` — AdaptiveAgent (observe/decide/act/evaluate/adapt) and BaselineAgent
-- `run_demo.py` — comparison runner
-- `sample_run.log` — example output from `python3 run_demo.py --trace`
-- `docs/index.html` — **browser demo**, a self-contained port of the same
-  simulation to vanilla HTML/CSS/JS (no build step, no server, no API keys).
-  Deploy it with GitHub Pages: push this repo, then in
-  **Settings → Pages → Build and deployment**, set the source branch and
-  `/docs` as the folder. The demo will be live at
-  `https://<username>.github.io/<repo>/` a minute or two later.
+## Phase 3 — Production-Grade Agent
 
-  This file only mirrors the *reference* Python implementation for a
-  zero-infrastructure, clickable demo — the canonical logic lives in the
-  `.py` files above. It intentionally leaves out the optional LLM tie-break
-  from `policy.py`: shipping an API key in client-side JS on a public page
-  isn't safe, so the browser version runs on the learned heuristic policy
-  alone. A server-side deployment (e.g. the Streamlit or Flask route) is
-  the place to wire the LLM piece back in.
+- [ ] FastAPI backend
+- [ ] PostgreSQL
+- [ ] Redis
+- [ ] Authentication / RBAC
+- [ ] Immutable audit trail
+- [ ] Tool permission system
+- [ ] Human approval workflows
+- [ ] Response rollback
+- [ ] Production observability
 
-  
-Check The Go to Market file to see how our product id driven to help businesses and to the websites auto repair the problem in a gify.
+## Phase 4 — Autonomous SOC
+
+- [ ] Multi-stage investigations
+- [ ] Threat hunting
+- [ ] Incident memory
+- [ ] Cross-alert correlation
+- [ ] Campaign detection
+- [ ] Attack-chain reconstruction
+- [ ] MITRE ATT&CK mapping
+- [ ] Adaptive investigation policies
+
+---
+
+# 🎓 What SentinelOps Demonstrates
+
+SentinelOps explores the intersection of:
+
+🛡️ Cybersecurity  
+🤖 Agentic AI  
+🔎 Security Investigation  
+🚨 SOC Automation  
+📊 Security Analytics  
+🧠 Evidence-Based Reasoning  
+🔄 Adaptive Decision Making  
+👨‍💻 Human-in-the-Loop Security  
+⚙️ Automated Response  
+
+The central idea is simple:
+
+> **Don't let the alert make the decision. Let the evidence make the decision.**
+
+---
+
+# ⚠️ Project Status
+
+**Experimental / Research Prototype**
+
+SentinelOps is designed to demonstrate an autonomous SOC investigation and response workflow in a controlled environment.
+
+It is **not currently a production SIEM, EDR, SOAR, or autonomous security appliance.**
+
+---
+
+## 📜 License
+
+Add an explicit open-source license if you intend to accept external use or contributions.
