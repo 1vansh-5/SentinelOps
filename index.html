@@ -3,608 +3,649 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SentinelOps — Static Runbook vs. Adaptive Agent</title>
+<title>SentinelOps SOC — Autonomous Investigation &amp; Response Agent</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg: #02213f;
-    --paper: #d8bb86;
-    --paper-ink: #2b2620;
-    --paper-stamp: #8a3b2e;
-    --paper-rule: #c9bd9e;
-    --console-bg: #0b1416;
-    --console-line: #16232690;
-    --console-text: #cfe8e4;
-    --console-dim: #6b8b89;
-    --ok: #6ee7b7;
-    --warn: #fbbf6b;
-    --bad: #f87171;
-    --info: #7dd3fc;
-    --accent: #f4a259;
-    --panel-border: #263039;
-    --ink-light: #e8edf1;
-    --ink-mid: #9fb0ba;
+    --bg:#101820; --paper:#efe7d8; --paper-ink:#2b2620; --paper-stamp:#8a3b2e; --paper-rule:#c9bd9e;
+    --console-bg:#0b1416; --console-line:#16232690; --console-text:#cfe8e4; --console-dim:#6b8b89;
+    --ok:#6ee7b7; --warn:#fbbf6b; --bad:#f87171; --info:#7dd3fc; --accent:#f4a259;
+    --panel-border:#263039; --ink-light:#e8edf1; --ink-mid:#9fb0ba;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
-  body{
-    background: var(--bg);
-    color: var(--ink-light);
-    font-family: 'Inter', system-ui, sans-serif;
-    line-height: 1.5;
-  }
-  .wrap{max-width: 1180px; margin: 0 auto; padding: 48px 24px 80px;}
+  body{background:var(--bg); color:var(--ink-light); font-family:'Inter',system-ui,sans-serif; line-height:1.5;}
+  .wrap{max-width:1220px; margin:0 auto; padding:48px 24px 80px;}
+  header.hero{display:flex; flex-direction:column; gap:10px; padding-bottom:32px; margin-bottom:28px; border-bottom:1px solid var(--panel-border);}
+  .kicker{font-family:'IBM Plex Mono',monospace; font-size:13px; color:var(--console-dim); letter-spacing:0.02em;}
+  h1{font-family:'Source Serif 4',serif; font-weight:700; font-style:italic; font-size:clamp(30px,4.6vw,50px); margin:0; color:var(--ink-light);}
+  .lede{max-width:70ch; color:var(--ink-mid); font-size:16.5px; margin-top:4px;}
+  .lede strong{color:var(--ink-light); font-weight:600;}
 
-  header.hero{
-    display:flex; flex-direction:column; gap: 10px;
-    padding-bottom: 32px; margin-bottom: 32px;
-    border-bottom: 1px solid var(--panel-border);
-  }
-  .kicker{
-    font-family:'IBM Plex Mono', monospace; font-size: 13px; color: var(--console-dim);
-    letter-spacing: 0.02em;
-  }
-  h1{
-    font-family:'Source Serif 4', serif; font-weight: 700; font-style: italic;
-    font-size: clamp(34px, 5vw, 54px); margin: 0; color: var(--ink-light);
-  }
-  .lede{
-    max-width: 62ch; color: var(--ink-mid); font-size: 17px; margin-top: 4px;
-  }
-  .lede strong{color: var(--ink-light); font-weight:600;}
-
-  .controls{
-    display:flex; flex-wrap:wrap; align-items:flex-end; gap: 20px;
-    background: #151f27; border: 1px solid var(--panel-border);
-    border-radius: 10px; padding: 18px 22px; margin-bottom: 28px;
-  }
+  .controls{display:flex; flex-wrap:wrap; align-items:flex-end; gap:20px; background:#151f27; border:1px solid var(--panel-border); border-radius:10px; padding:18px 22px; margin-bottom:26px;}
   .field{display:flex; flex-direction:column; gap:6px;}
-  .field label{font-size:12px; color:var(--ink-mid); font-family:'IBM Plex Mono', monospace;}
+  .field label{font-size:12px; color:var(--ink-mid); font-family:'IBM Plex Mono',monospace;}
   .field input[type=range]{width:140px;}
-  .field .val{font-family:'IBM Plex Mono', monospace; color: var(--ink-light); font-size:13px;}
-  button.run{
-    background: var(--accent); color:#241505; border:none; border-radius:8px;
-    padding: 12px 22px; font-weight:700; font-size:15px; cursor:pointer;
-    font-family:'Inter',sans-serif;
-  }
+  .field .val{font-family:'IBM Plex Mono',monospace; color:var(--ink-light); font-size:13px;}
+  button.run{background:var(--accent); color:#241505; border:none; border-radius:8px; padding:12px 22px; font-weight:700; font-size:15px; cursor:pointer; font-family:'Inter',sans-serif;}
   button.run:hover{filter:brightness(1.08);}
   button.run:disabled{opacity:0.5; cursor:default;}
-  button.ghost{
-    background:transparent; color:var(--ink-mid); border:1px solid var(--panel-border);
-    border-radius:8px; padding:12px 16px; cursor:pointer; font-family:'Inter',sans-serif; font-size:14px;
-  }
+  button.ghost{background:transparent; color:var(--ink-mid); border:1px solid var(--panel-border); border-radius:8px; padding:12px 16px; cursor:pointer; font-family:'Inter',sans-serif; font-size:14px;}
   button.ghost:hover{color:var(--ink-light); border-color:var(--ink-mid);}
 
-  .arena{
-    display:grid; grid-template-columns: 1fr 1fr; gap: 24px;
-  }
-  @media (max-width: 880px){ .arena{grid-template-columns: 1fr;} }
-
-  .panel-title{
-    display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px;
-  }
-  .panel-title h2{font-size:15px; margin:0; font-family:'IBM Plex Mono',monospace; letter-spacing:0.02em;}
+  .arena{display:grid; grid-template-columns: 0.85fr 1.15fr; gap:24px;}
+  @media (max-width:960px){ .arena{grid-template-columns:1fr;} }
+  .panel-title{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:12px;}
+  .panel-title h2{font-size:14px; margin:0; font-family:'IBM Plex Mono',monospace; letter-spacing:0.02em;}
   .panel-title .tag{font-size:11px; color:var(--console-dim); font-family:'IBM Plex Mono',monospace;}
 
-  /* --- Runbook side: an unchanging index card --- */
-  .runbook{
-    background: var(--paper); color: var(--paper-ink);
-    border-radius: 4px; padding: 26px 26px 20px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-    font-family: 'Source Serif 4', serif;
-    position: relative;
-    min-height: 560px;
-    display:flex; flex-direction:column;
-  }
-  .runbook::before{
-    content:"FIXED PROCEDURE — NO REVISIONS";
-    position:absolute; top:18px; right:20px;
-    font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:0.06em;
-    color: var(--paper-stamp); border:1.5px solid var(--paper-stamp);
-    padding:3px 7px; border-radius:3px; transform: rotate(3deg);
-    opacity:0.85;
-  }
-  .runbook h3{margin:0 0 2px; font-size:20px; font-weight:700;}
-  .runbook .sub{font-size:13px; color:#5a5140; font-style:italic; margin-bottom:16px;}
-  .runbook table{width:100%; border-collapse:collapse; font-size:13px; margin-bottom:14px;}
-  .runbook th{
-    text-align:left; font-family:'IBM Plex Mono',monospace; font-size:10.5px;
-    color:#7a6f56; font-weight:500; padding-bottom:6px; border-bottom:1px solid var(--paper-rule);
-  }
-  .runbook td{padding:7px 6px; border-bottom:1px dotted var(--paper-rule); vertical-align:top;}
-  .runbook-log{
-    font-family:'IBM Plex Mono',monospace; font-size:12px; color:#4a4230;
-    background:rgba(0,0,0,0.04); border:1px solid var(--paper-rule); border-radius:3px;
-    padding:10px 12px; height:130px; overflow-y:auto; margin-top:auto;
-  }
-  .runbook-log div{margin-bottom:4px;}
+  .runbook{background:var(--paper); color:var(--paper-ink); border-radius:4px; padding:24px 24px 18px; box-shadow:0 8px 24px rgba(0,0,0,0.35); font-family:'Source Serif 4',serif; position:relative; min-height:640px; display:flex; flex-direction:column;}
+  .runbook::before{content:"TRUSTS THE ALERT LABEL"; position:absolute; top:18px; right:20px; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:0.06em; color:var(--paper-stamp); border:1.5px solid var(--paper-stamp); padding:3px 7px; border-radius:3px; transform:rotate(3deg); opacity:0.85;}
+  .runbook h3{margin:0 0 2px; font-size:19px; font-weight:700;}
+  .runbook .sub{font-size:12.5px; color:#5a5140; font-style:italic; margin-bottom:14px;}
+  .runbook-rules{font-family:'IBM Plex Mono',monospace; font-size:11px; color:#5a5140; background:rgba(0,0,0,0.04); border:1px solid var(--paper-rule); border-radius:3px; padding:8px 10px; margin-bottom:12px;}
+  .runbook-log{font-family:'IBM Plex Mono',monospace; font-size:12px; color:#4a4230; flex:1; overflow-y:auto; padding-right:4px;}
+  .runbook-log .entry{padding:6px 0; border-bottom:1px dotted var(--paper-rule);}
+  .runbook-log .blocked{color:var(--paper-stamp); font-weight:600;}
 
-  /* --- Adaptive side: a live console --- */
-  .console-panel{
-    background: var(--console-bg); border-radius:4px; padding: 22px 22px 18px;
-    border: 1px solid #1c2b2e; box-shadow: 0 8px 24px rgba(0,0,0,0.35);
-    min-height: 560px; display:flex; flex-direction:column;
-  }
-  .console-panel h3{
-    margin:0 0 2px; font-family:'IBM Plex Mono',monospace; font-size:17px; color:var(--console-text);
-  }
-  .console-panel .sub{font-size:12px; color:var(--console-dim); margin-bottom:14px; font-family:'IBM Plex Mono',monospace;}
-  .log{
-    font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--console-text);
-    height: 300px; overflow-y:auto; padding-right:4px;
-  }
-  .log .line{padding:3px 0; border-bottom:1px solid var(--console-line); display:flex; gap:8px;}
-  .log .t{color:var(--console-dim); flex-shrink:0;}
-  .log .ok{color:var(--ok);}
-  .log .warn{color:var(--warn);}
-  .log .bad{color:var(--bad);}
-  .log .info{color:var(--info);}
+  .console-panel{background:var(--console-bg); border-radius:4px; padding:22px 22px 16px; border:1px solid #1c2b2e; box-shadow:0 8px 24px rgba(0,0,0,0.35); min-height:640px; display:flex; flex-direction:column;}
+  .console-panel h3{margin:0 0 2px; font-family:'IBM Plex Mono',monospace; font-size:16px; color:var(--console-text);}
+  .console-panel .sub{font-size:12px; color:var(--console-dim); margin-bottom:12px; font-family:'IBM Plex Mono',monospace;}
+  .cases{flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px; padding-right:4px;}
+  .case{background:#0f1c1f; border:1px solid var(--panel-border); border-radius:6px; padding:10px 12px;}
+  .case .head{display:flex; justify-content:space-between; align-items:baseline; font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-mid); margin-bottom:4px;}
+  .case .head b{color:var(--console-text); font-weight:600;}
+  .case .steps{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--console-dim); display:flex; flex-direction:column; gap:2px;}
+  .case .steps .reconsider{color:var(--info); font-weight:600;}
+  .case .verdict-row{display:flex; align-items:center; justify-content:space-between; margin-top:6px; gap:8px; flex-wrap:wrap;}
+  .badge{font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; padding:3px 8px; border-radius:4px; display:inline-block;}
+  .badge.succeeded{background:rgba(248,113,113,0.15); color:var(--bad);}
+  .badge.failed{background:rgba(251,191,107,0.15); color:var(--warn);}
+  .badge.benign{background:rgba(110,231,183,0.15); color:var(--ok);}
+  .badge.inconclusive{background:rgba(125,211,252,0.15); color:var(--info);}
+  .badge.override{background:rgba(244,162,89,0.18); color:var(--accent);}
+  .case .action-line{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-mid);}
+  .ovr-btns{display:flex; gap:6px;}
+  .ovr-btns button{font-family:'IBM Plex Mono',monospace; font-size:10px; padding:4px 7px; border-radius:4px; border:1px solid var(--panel-border); background:transparent; color:var(--ink-mid); cursor:pointer;}
+  .ovr-btns button:hover{color:var(--ink-light); border-color:var(--ink-mid);}
 
-  .services{
-    display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin: 14px 0;
-  }
-  .svc{
-    border-radius:6px; padding:8px 9px; font-family:'IBM Plex Mono',monospace; font-size:10.5px;
-    border:1px solid var(--panel-border);
-  }
-  .svc .name{color:var(--ink-mid); display:block; margin-bottom:3px;}
-  .svc .status{font-weight:600;}
-  .runbook .services .svc{background:rgba(0,0,0,0.03); border-color:var(--paper-rule); color:#4a4230;}
-  .runbook .services .svc .name{color:#7a6f56;}
-  .console-panel .services .svc{background:#0f1c1f;}
-
-  .stat-row{
-    display:flex; gap:16px; margin-top:auto; padding-top:12px; border-top:1px solid var(--panel-border);
-    font-family:'IBM Plex Mono',monospace; font-size:12px;
-  }
+  .stat-row{display:flex; gap:14px; margin-top:12px; padding-top:12px; border-top:1px solid var(--panel-border); font-family:'IBM Plex Mono',monospace; font-size:11.5px; flex-wrap:wrap;}
   .runbook .stat-row{border-top:1px solid var(--paper-rule); color:#4a4230;}
   .stat{display:flex; flex-direction:column; gap:2px;}
-  .stat .n{font-size:19px; font-weight:700; color:var(--ink-light);}
+  .stat .n{font-size:18px; font-weight:700; color:var(--ink-light);}
   .runbook .stat .n{color:var(--paper-ink); font-family:'Source Serif 4',serif;}
-  .stat .l{color:var(--ink-mid); font-size:10.5px;}
+  .stat .n.bad{color:var(--bad);} .stat .n.ok{color:var(--ok);}
+  .stat .l{color:var(--ink-mid); font-size:10px;}
   .runbook .stat .l{color:#7a6f56;}
 
-  .summary{
-    margin-top: 34px; background:#151f27; border:1px solid var(--panel-border);
-    border-radius:10px; padding: 22px 26px;
-  }
+  .summary{margin-top:32px; background:#151f27; border:1px solid var(--panel-border); border-radius:10px; padding:22px 26px;}
   .summary h2{font-family:'IBM Plex Mono',monospace; font-size:14px; margin:0 0 16px; color:var(--ink-mid); font-weight:500;}
   .bar-row{display:flex; align-items:center; gap:14px; margin-bottom:14px;}
-  .bar-row .label{width:190px; font-size:13px; color:var(--ink-mid); flex-shrink:0;}
+  .bar-row .label{width:210px; font-size:13px; color:var(--ink-mid); flex-shrink:0;}
   .bar-track{flex:1; height:10px; background:#1c2830; border-radius:6px; overflow:hidden; display:flex;}
   .bar-fill{height:100%; border-radius:6px 0 0 6px;}
-  .bar-fill.adaptive{background: var(--ok);}
-  .bar-fill.baseline{background: var(--bad);}
+  .bar-fill.adaptive{background:var(--ok);} .bar-fill.baseline{background:var(--bad);}
   .bar-row .pct{width:52px; text-align:right; font-family:'IBM Plex Mono',monospace; font-size:13px;}
-
-  .verdict{
-    margin-top:18px; font-size:14px; color: var(--ink-mid); border-top:1px solid var(--panel-border);
-    padding-top:16px;
-  }
+  .verdict{margin-top:16px; font-size:14px; color:var(--ink-mid); border-top:1px solid var(--panel-border); padding-top:16px;}
   .verdict strong{color:var(--accent);}
-
-  footer{
-    margin-top: 40px; font-size:13px; color: var(--console-dim); font-family:'IBM Plex Mono',monospace;
-  }
-  footer a{color: var(--info);}
+  footer{margin-top:36px; font-size:13px; color:var(--console-dim); font-family:'IBM Plex Mono',monospace;}
+  footer a{color:var(--info);}
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <header class="hero">
-    <div class="kicker">agentic systems demo · business operations / cybersecurity</div>
-    <h1>Same incidents. One script, one agent.</h1>
+    <div class="kicker">agentic systems demo · Track 5 — Cybersecurity · Autonomous SOC Investigation &amp; Response</div>
+    <h1>The alert label is a hint. It is not the verdict.</h1>
     <p class="lede">
-      Both sides below face <strong>the exact same injected-incident schedule</strong>.
-      The left is a static runbook: one lookup table, one attempt, escalate on failure.
-      The right observes, decides, acts, evaluates the outcome, and adapts — retrying
-      with a different move when the first one doesn't work, and learning what actually
-      fixes what. Press run and watch them diverge.
+      Both systems below face <strong>the exact same stream of simulated NIDS/Suricata alerts</strong>.
+      One trusts the signature's severity word and reacts on the spot. The other treats the label as a
+      starting hypothesis — it pulls asset inventory, a synthetic CVE knowledge base, packet metadata,
+      and server logs, decides what to check next, reaches an evidence-backed verdict, acts only when
+      justified, verifies the effect, and reopens the case if new evidence arrives later.
     </p>
   </header>
 
   <div class="controls">
-    <div class="field">
-      <label for="ticks">TICKS</label>
-      <input type="range" id="ticks" min="20" max="120" value="60" step="5">
-      <span class="val" id="ticksVal">60</span>
-    </div>
-    <div class="field">
-      <label for="seed">SEED</label>
-      <input type="range" id="seed" min="1" max="99" value="7" step="1">
-      <span class="val" id="seedVal">7</span>
-    </div>
-    <div class="field">
-      <label for="speed">SPEED</label>
-      <input type="range" id="speed" min="1" max="10" value="6" step="1">
-      <span class="val" id="speedVal">6</span>
-    </div>
-    <button class="run" id="runBtn">Run simulation</button>
+    <div class="field"><label for="ticks">TICKS</label><input type="range" id="ticks" min="30" max="150" value="80" step="10"><span class="val" id="ticksVal">80</span></div>
+    <div class="field"><label for="seed">SEED</label><input type="range" id="seed" min="1" max="99" value="11" step="1"><span class="val" id="seedVal">11</span></div>
+    <div class="field"><label for="speed">SPEED</label><input type="range" id="speed" min="1" max="10" value="6" step="1"><span class="val" id="speedVal">6</span></div>
+    <button class="run" id="runBtn">▶ Run investigation</button>
     <button class="ghost" id="resetBtn">Reset</button>
   </div>
 
   <div class="arena">
-    <!-- STATIC RUNBOOK -->
     <div>
-      <div class="panel-title"><h2>STATIC RUNBOOK</h2><span class="tag">no memory · no retries</span></div>
+      <div class="panel-title"><h2>ALERT-LABEL AUTOPILOT</h2><span class="tag">no evidence · instant reaction</span></div>
       <div class="runbook">
-        <h3>Incident Response Card</h3>
-        <div class="sub">Laminated. Filed 2019. Never updated.</div>
-        <table>
-          <tr><th>symptom pattern</th><th>action</th></tr>
-          <tr><td>latency + errors</td><td>restart_service</td></tr>
-          <tr><td>memory climbing + latency</td><td>restart_service</td></tr>
-          <tr><td>cpu + latency + errors + security</td><td>block_ip</td></tr>
-          <tr><td>errors + security alert</td><td>rotate_credentials</td></tr>
-          <tr><td>errors + disk full</td><td>cleanup_logs</td></tr>
-          <tr><td>cpu + mem + latency</td><td>scale_up</td></tr>
-          <tr><td><em>anything else</em></td><td><em>guess: restart_service</em></td></tr>
-        </table>
-        <div class="services" id="svcBaseline"></div>
-        <div class="runbook-log" id="logBaseline"></div>
-        <div class="stat-row" id="statsBaseline"></div>
+        <h3>Triage Policy</h3>
+        <div class="sub">Whatever the signature says, taken at face value.</div>
+        <div class="runbook-rules">
+          EXPLOIT / WEB / TROJAN → auto-block immediately<br>
+          POLICY → log only, no action<br>
+          SCAN → ignored
+        </div>
+        <div class="runbook-log" id="baselineLog"></div>
+        <div class="stat-row" id="baselineStats"></div>
       </div>
     </div>
 
-    <!-- ADAPTIVE AGENT -->
     <div>
-      <div class="panel-title"><h2>SENTINELOPS · ADAPTIVE</h2><span class="tag">observe → decide → act → evaluate → adapt</span></div>
+      <div class="panel-title"><h2>SENTINELOPS · SOC AGENT</h2><span class="tag">observe evidence → decide → act → evaluate → adapt</span></div>
       <div class="console-panel">
-        <h3>live agent loop</h3>
-        <div class="sub">learned success-rate table updates after every action</div>
-        <div class="services" id="svcAdaptive"></div>
-        <div class="log" id="logAdaptive"></div>
-        <div class="stat-row" id="statsAdaptive"></div>
+        <h3>live case queue</h3>
+        <div class="sub">each card is one alert under active or completed investigation</div>
+        <div class="cases" id="cases"></div>
+        <div class="stat-row" id="adaptiveStats"></div>
       </div>
     </div>
   </div>
 
   <div class="summary">
-    <h2>RESULT — self-resolution rate, identical incident schedule</h2>
+    <h2>RESULT — correct-response rate, identical alert stream</h2>
     <div class="bar-row">
-      <div class="label">SentinelOps adaptive</div>
+      <div class="label">SentinelOps SOC agent</div>
       <div class="bar-track"><div class="bar-fill adaptive" id="barAdaptive" style="width:0%"></div></div>
       <div class="pct" id="pctAdaptive">—</div>
     </div>
     <div class="bar-row">
-      <div class="label">Static runbook</div>
+      <div class="label">Alert-label autopilot</div>
       <div class="bar-track"><div class="bar-fill baseline" id="barBaseline" style="width:0%"></div></div>
       <div class="pct" id="pctBaseline">—</div>
     </div>
-    <div class="verdict" id="verdict">Run the simulation to see the comparison.</div>
+    <div class="verdict" id="verdict">Run the investigation to see the comparison.</div>
   </div>
 
   <footer>
     100% client-side simulation — no server, no API calls, nothing to configure.
-    Source ports the reference Python implementation (environment.py / policy.py / agent.py) line-for-line into JS below.
+    Click the override buttons on any resolved case in the live queue to see the agent
+    reopen its own verdict on human feedback.
   </footer>
 </div>
 
 <script>
 // =====================================================================
-// SentinelOps — browser port of the reference simulation.
-// No network calls, no API keys: this file is self-contained on purpose
-// so it can run as a static GitHub Pages site with zero backend.
+// SentinelOps SOC — core simulation logic (DOM-free, shared by the
+// browser page and this headless test harness).
 // =====================================================================
 
-const THRESHOLDS = { cpu:85, mem:85, latency:300, error_rate:2, disk:90, security_alert:0 };
-const BASELINE_METRICS = { cpu:35, mem:40, latency:120, error_rate:0.3, disk:45, security_alert:0 };
-
-const INCIDENTS = {
-  crashed_service: { effect:{latency:900, error_rate:40}, fixes:{restart_service:0.9, rollback_deploy:0.55} },
-  memory_leak: { effect:{mem:96, latency:400}, fixes:{restart_service:0.85, scale_up:0.4} },
-  ddos_attack: { effect:{latency:950, error_rate:30, cpu:97, security_alert:1}, fixes:{block_ip:0.85, isolate_host:0.7, scale_up:0.25} },
-  credential_stuffing: { effect:{error_rate:15, security_alert:1}, fixes:{rotate_credentials:0.9, block_ip:0.6} },
-  disk_full: { effect:{disk:99, error_rate:20}, fixes:{cleanup_logs:0.95} },
-  config_drift: { effect:{error_rate:25, latency:350}, fixes:{rollback_deploy:0.9, restart_service:0.3} },
-  latency_spike_load: { effect:{latency:500, cpu:90, mem:80}, fixes:{scale_up:0.85, clear_cache:0.5} },
-  cascading_dependency_failure: { effect:{latency:700, error_rate:35, cpu:80, mem:85},
-    fixes:{restart_service:0.3, rollback_deploy:0.3, scale_up:0.3, isolate_host:0.2} },
-};
-const INCIDENT_KEYS = Object.keys(INCIDENTS);
-const ACTIONS = ["restart_service","scale_up","clear_cache","rollback_deploy","block_ip",
-  "isolate_host","rotate_credentials","cleanup_logs","escalate_to_human","no_op"];
-
-const PRIOR_HINTS = {
-  "F,F,T,T,F,F": {rollback_deploy:0.6, restart_service:0.5, clear_cache:0.3},
-  "F,T,T,F,F,F": {restart_service:0.5, scale_up:0.3},
-  "T,F,T,T,F,T": {block_ip:0.6, isolate_host:0.5, scale_up:0.3},
-  "F,F,F,T,F,T": {rotate_credentials:0.6, block_ip:0.4},
-  "F,F,F,T,T,F": {cleanup_logs:0.7},
-  "T,T,T,F,F,F": {scale_up:0.6, clear_cache:0.35},
-};
-const STATIC_RUNBOOK = {
-  "F,F,T,T,F,F": "restart_service",
-  "F,T,T,F,F,F": "restart_service",
-  "T,F,T,T,F,T": "block_ip",
-  "F,F,F,T,F,T": "rotate_credentials",
-  "F,F,F,T,T,F": "cleanup_logs",
-  "T,T,T,F,F,F": "scale_up",
-};
-
-// --- seeded RNG (mulberry32) so a given seed reproduces exactly ---
-function makeRng(seed){
+// --- seeded RNG (mulberry32) ---
+function makeRng(seed) {
   let a = seed >>> 0;
-  return function(){
+  return function () {
     a |= 0; a = (a + 0x6D2B79F5) | 0;
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-function choice(rng, arr){ return arr[Math.floor(rng()*arr.length)]; }
-function uniform(rng, lo, hi){ return lo + rng()*(hi-lo); }
+function choice(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
+function randIp(rng) {
+  return `${Math.floor(uniform(rng,1,223))}.${Math.floor(uniform(rng,0,255))}.${Math.floor(uniform(rng,0,255))}.${Math.floor(uniform(rng,1,254))}`;
+}
+function uniform(rng, lo, hi) { return lo + rng() * (hi - lo); }
 
-class Service {
-  constructor(name){ this.name = name; this.metrics = {...BASELINE_METRICS}; this.activeIncident = null; this.ticksWithIncident = 0; }
-  isHealthy(){
-    const m = this.metrics;
-    return m.cpu < THRESHOLDS.cpu && m.mem < THRESHOLDS.mem && m.latency < THRESHOLDS.latency &&
-           m.error_rate < THRESHOLDS.error_rate && m.disk < THRESHOLDS.disk && m.security_alert <= THRESHOLDS.security_alert;
+// --- synthetic asset inventory + CVE knowledge base (baked in as vulnerable_to) ---
+const ASSETS = {
+  "web-app-01": { exposure: "internet-facing", criticality: "high", software: "Log4j 2.14 / Apache Struts 2.3", vulnerable_to: ["log4shell", "struts_rce", "sqli"] },
+  "vpn-gateway-01": { exposure: "internet-facing", criticality: "high", software: "OpenSSH (weak password policy)", vulnerable_to: ["ssh_bruteforce"] },
+  "db-server-02": { exposure: "internal", criticality: "critical", software: "PostgreSQL 15.2 (patched)", vulnerable_to: [] },
+  "file-server-03": { exposure: "internal", criticality: "medium", software: "Samba 4.19 (patched)", vulnerable_to: [] },
+};
+const ASSET_NAMES = Object.keys(ASSETS);
+
+// --- simulated NIDS/Snort/Suricata alert signatures ---
+// severityWord is what a naive triage tool would key off of -- the label alone.
+const ALERT_TYPES = [
+  { sig: "ET EXPLOIT Log4Shell Attempt", exploit: "log4shell", severityWord: "EXPLOIT", targets: ["web-app-01"] },
+  { sig: "ET EXPLOIT Apache Struts RCE Attempt", exploit: "struts_rce", severityWord: "EXPLOIT", targets: ["web-app-01"] },
+  { sig: "ET WEB SQL Injection Attempt", exploit: "sqli", severityWord: "WEB", targets: ["web-app-01"] },
+  { sig: "ET POLICY SSH Brute Force", exploit: "ssh_bruteforce", severityWord: "POLICY", targets: ["vpn-gateway-01"] },
+  { sig: "ET SCAN Nmap Port Scan", exploit: "portscan", severityWord: "SCAN", targets: ASSET_NAMES },
+  { sig: "ET TROJAN Possible C2 Beacon", exploit: "c2_beacon", severityWord: "TROJAN", targets: ["db-server-02", "file-server-03", "web-app-01"] },
+];
+
+const EVIDENCE_TYPES = ["asset_inventory", "vulnerability_kb", "packet_metadata", "server_logs"];
+const CONFIDENCE_THRESHOLD = 0.5;
+const INCONCLUSIVE_BAND = 0.25;
+const MAX_TICKS_PER_CASE = 8; // safety cap even if evidence keeps coming back flaky
+
+// --- learned per-signature evidence-priority policy ---
+const PRIOR_WEIGHTS = {
+  log4shell: { asset_inventory: 0.3, vulnerability_kb: 0.6, packet_metadata: 0.3, server_logs: 0.7 },
+  struts_rce: { asset_inventory: 0.3, vulnerability_kb: 0.6, packet_metadata: 0.3, server_logs: 0.7 },
+  sqli: { asset_inventory: 0.2, vulnerability_kb: 0.4, packet_metadata: 0.35, server_logs: 0.6 },
+  ssh_bruteforce: { asset_inventory: 0.2, vulnerability_kb: 0.15, packet_metadata: 0.3, server_logs: 0.7 },
+  portscan: { asset_inventory: 0.2, vulnerability_kb: 0.1, packet_metadata: 0.6, server_logs: 0.3 },
+  c2_beacon: { asset_inventory: 0.2, vulnerability_kb: 0.1, packet_metadata: 0.4, server_logs: 0.7 },
+};
+
+class SocPolicy {
+  constructor(alpha = 0.3) { this.alpha = alpha; this.w = JSON.parse(JSON.stringify(PRIOR_WEIGHTS)); }
+  rank(exploit, excluded) {
+    const table = this.w[exploit] || { asset_inventory: 0.25, vulnerability_kb: 0.25, packet_metadata: 0.25, server_logs: 0.25 };
+    return EVIDENCE_TYPES.filter(e => !excluded.has(e)).sort((a, b) => table[b] - table[a]);
   }
-  signature(){
-    const m = this.metrics;
-    return [m.cpu>=THRESHOLDS.cpu, m.mem>=THRESHOLDS.mem, m.latency>=THRESHOLDS.latency,
-            m.error_rate>=THRESHOLDS.error_rate, m.disk>=THRESHOLDS.disk, m.security_alert>THRESHOLDS.security_alert];
+  decide(exploit, excluded, rng) {
+    const ranked = this.rank(exploit, excluded);
+    if (ranked.length === 0) return null;
+    if (rng() < 0.1) return choice(rng, ranked);
+    return ranked[0];
+  }
+  update(exploit, evidenceType, observedAbsPush) {
+    if (!this.w[exploit]) this.w[exploit] = { asset_inventory: 0.25, vulnerability_kb: 0.25, packet_metadata: 0.25, server_logs: 0.25 };
+    const old = this.w[exploit][evidenceType];
+    this.w[exploit][evidenceType] = old + this.alpha * (observedAbsPush - old);
   }
 }
-function sigKey(sig){ return sig.map(b=>b?"T":"F").join(","); }
 
-class Environment {
-  constructor(names, seed, incidentProb=0.22, flakyProb=0.10){
-    this.rng = makeRng(seed);
-    this.services = {}; names.forEach(n=> this.services[n] = new Service(n));
-    this.incidentProb = incidentProb; this.flakyProb = flakyProb; this.tickNum = 0;
+// --- Environment: generates the alert stream + evidence-on-demand ---
+class SocEnvironment {
+  constructor(seed, alertProb = 0.35, flakyProb = 0.08) {
+    this.alertRng = makeRng(seed);        // controls WHEN alerts spawn + ground truth
+    this.evidenceRng = makeRng(seed + 999); // controls evidence flakiness (only consumed by the adaptive agent)
+    this.alertProb = alertProb;
+    this.flakyProb = flakyProb;
+    this.tickNum = 0;
+    this.nextId = 1;
   }
-  drift(){
-    Object.values(this.services).forEach(svc=>{
-      if(!svc.activeIncident){
-        for(const k of ["cpu","mem","latency","error_rate","disk"]) svc.metrics[k] = Math.max(0, BASELINE_METRICS[k] + uniform(this.rng,-5,5));
-        svc.metrics.security_alert = 0;
+
+  maybeSpawnAlert() {
+    if (this.alertRng() >= this.alertProb) return null;
+    const type = choice(this.alertRng, ALERT_TYPES);
+    const target = choice(this.alertRng, type.targets);
+    const asset = ASSETS[target];
+    const srcIp = randIp(this.alertRng);
+
+    const isPortscan = type.exploit === "portscan";
+    const falsePositiveRoll = this.alertRng();
+    const isFalsePositive = isPortscan ? false : falsePositiveRoll < 0.22;
+
+    let isRealAttempt = !isFalsePositive;
+    let vulnerable = asset.vulnerable_to.includes(type.exploit);
+    let succeeded = false;
+    if (isPortscan) {
+      succeeded = false; // recon only, never a compromise by itself
+    } else if (isRealAttempt) {
+      succeeded = vulnerable && this.alertRng() < 0.82;
+    }
+
+    // A minority of TRUE successful compromises have delayed forensic evidence --
+    // early server_log checks under-report them, requiring later reconsideration.
+    const hasDelayedEvidence = succeeded && this.alertRng() < 0.35;
+    const revealTick = hasDelayedEvidence ? this.tickNum + Math.floor(uniform(this.alertRng, 4, 8)) : null;
+
+    return {
+      id: this.nextId++,
+      spawnTick: this.tickNum,
+      alert: type,
+      target,
+      srcIp,
+      gt: { isRealAttempt, succeeded, isPortscan },
+      hasDelayedEvidence,
+      revealTick,
+    };
+  }
+
+  // Returns {text, push} or null (flaky / temporarily unavailable)
+  queryEvidence(kase, evidenceType) {
+    if (this.evidenceRng() < this.flakyProb) return null;
+
+    const asset = ASSETS[kase.target];
+    if (evidenceType === "asset_inventory") {
+      return {
+        text: `${kase.target}: ${asset.exposure}, criticality=${asset.criticality}, running ${asset.software}`,
+        push: asset.exposure === "internet-facing" ? 0.05 : -0.05,
+      };
+    }
+    if (evidenceType === "vulnerability_kb") {
+      if (kase.gt.isPortscan) return { text: `vulnerability_kb: not applicable — reconnaissance, not an exploit attempt`, push: -0.1 };
+      const vulnerable = asset.vulnerable_to.includes(kase.alert.exploit);
+      return {
+        text: vulnerable
+          ? `vulnerability_kb: ${kase.target} IS VULNERABLE to ${kase.alert.exploit} (unpatched)`
+          : `vulnerability_kb: ${kase.target} is NOT vulnerable to ${kase.alert.exploit} (patched / not applicable)`,
+        push: vulnerable ? 0.3 : -0.35,
+      };
+    }
+    if (evidenceType === "packet_metadata") {
+      if (kase.gt.isPortscan) return { text: `packet_metadata: sequential low-volume probes across common ports — classic scan pattern`, push: -0.25 };
+      if (!kase.gt.isRealAttempt) return { text: `packet_metadata: single malformed packet, no crafted payload — consistent with automated noise`, push: -0.3 };
+      return { text: `packet_metadata: crafted payload matching known exploit shape, repeated attempts from ${kase.srcIp}`, push: 0.2 };
+    }
+    if (evidenceType === "server_logs") {
+      if (kase.hasDelayedEvidence && this.tickNum < kase.revealTick) {
+        return { text: `server_logs: no anomalous process or auth activity in available window (partial log coverage)`, push: -0.2, partial: true };
       }
+      if (kase.gt.succeeded) {
+        const msgs = {
+          log4shell: "server_logs: JVM spawned an unexpected child process and opened an outbound connection to an unlisted host",
+          struts_rce: "server_logs: web worker spawned a shell process — command execution confirmed",
+          sqli: "server_logs: application logs show a bulk SELECT against the customer table minutes after the request",
+          ssh_bruteforce: "server_logs: auth log shows 40+ failed logins followed by a successful login from the same source",
+          c2_beacon: "server_logs: recurring outbound beacon to a known-bad host every 60s, established persistence artifact found",
+        };
+        return { text: msgs[kase.alert.exploit] || "server_logs: anomalous process and outbound activity observed", push: 0.55 };
+      }
+      if (kase.gt.isRealAttempt) {
+        return { text: `server_logs: attempt logged and rejected (patched / WAF enforced) — no compromise indicators`, push: -0.45 };
+      }
+      return { text: `server_logs: no anomalous activity found — consistent with a benign trigger`, push: -0.3 };
+    }
+    return null;
+  }
+
+  tick() { this.tickNum++; }
+}
+
+// --- Adaptive SOC investigation agent ---
+class AdaptiveSocAgent {
+  constructor(env, onLog = () => {}) {
+    this.env = env; this.onLog = onLog;
+    this.policy = new SocPolicy();
+    this.cases = new Map(); // id -> case state
+    this.pendingReconsider = []; // {revealTick, caseId}
+    this.stats = { total: 0, resolved: 0, escalations: 0, blocked: 0, falseBlocks: 0, missedBreaches: 0, correct: 0, reconsiderations: 0, overrides: 0 };
+  }
+
+  ingest(kase) {
+    this.stats.total++;
+    const state = {
+      kase, queried: new Set(), evidence: [], score: 0, sawRealSignal: false,
+      status: "investigating", verdict: null, action: null, ticksSpent: 0, overridden: false,
+    };
+    this.cases.set(kase.id, state);
+    this.onLog(kase.id, "new", `Alert #${kase.id}: '${kase.alert.sig}' → target ${kase.target}, source ${kase.srcIp}`);
+    if (kase.hasDelayedEvidence) this.pendingReconsider.push({ revealTick: kase.revealTick, caseId: kase.id });
+    return state;
+  }
+
+  step() {
+    // advance every open investigation by exactly one evidence-gathering or finalize action
+    for (const [id, st] of this.cases) {
+      if (st.status !== "investigating") continue;
+      st.ticksSpent++;
+      const next = this.policy.decide(st.kase.alert.exploit, st.queried, this.env.alertRng);
+
+      if (next === null || Math.abs(st.score) >= CONFIDENCE_THRESHOLD || st.ticksSpent > MAX_TICKS_PER_CASE) {
+        this._finalize(id, st);
+        continue;
+      }
+      const result = this.env.queryEvidence(st.kase, next);
+      if (result === null) {
+        this.onLog(id, "flaky", `decide: query ${next} → temporarily unavailable, will retry`);
+        continue;
+      }
+      st.queried.add(next);
+      st.score += result.push;
+      if (result.push > 0.15 && next !== "asset_inventory") st.sawRealSignal = true;
+      st.evidence.push({ type: next, text: result.text, push: result.push });
+      this.onLog(id, "evidence", `decide: query ${next} → ${result.text}`);
+      this.policy.update(st.kase.alert.exploit, next, Math.abs(result.push));
+
+      if (Math.abs(st.score) >= CONFIDENCE_THRESHOLD || st.queried.size === EVIDENCE_TYPES.length) {
+        this._finalize(id, st);
+      }
+    }
+
+    // process any evidence that arrives independently of the agent's own queries
+    this.pendingReconsider = this.pendingReconsider.filter(r => {
+      if (this.env.tickNum < r.revealTick) return true;
+      this._reconsider(r.caseId);
+      return false;
     });
   }
-  maybeInject(log){
-    Object.values(this.services).forEach(svc=>{
-      if(!svc.activeIncident && this.rng() < this.incidentProb){
-        const inc = choice(this.rng, INCIDENT_KEYS);
-        svc.activeIncident = inc; svc.ticksWithIncident = 0;
-        Object.entries(INCIDENTS[inc].effect).forEach(([k,v])=> svc.metrics[k]=v);
-        log(`incident '${inc}' injected on ${svc.name}`, "warn");
+
+  _finalize(id, st) {
+    if (st.score >= CONFIDENCE_THRESHOLD) st.verdict = "ATTACK SUCCEEDED";
+    else if (st.score <= -0.4) st.verdict = st.sawRealSignal ? "ATTACK FAILED (blocked/patched)" : "FALSE POSITIVE";
+    else st.verdict = "INCONCLUSIVE";
+
+    if (st.verdict === "ATTACK SUCCEEDED") {
+      st.action = "BLOCKED " + st.kase.srcIp;
+      this.stats.blocked++;
+      this.onLog(id, "action", `act: simulated firewall block on ${st.kase.srcIp}`);
+      this.onLog(id, "verify", `evaluate: re-checked traffic — 0 further packets from ${st.kase.srcIp}, block confirmed effective`);
+    } else if (st.verdict === "INCONCLUSIVE") {
+      st.action = "ESCALATED to analyst";
+      this.stats.escalations++;
+      this.onLog(id, "escalate", `evaluate: evidence inconclusive (score ${st.score.toFixed(2)}) → escalating to human analyst`);
+    } else {
+      st.action = st.verdict === "FALSE POSITIVE" ? "closed, no action" : "logged for monitoring, no block";
+    }
+    st.status = "resolved";
+    this.stats.resolved++;
+
+    const correct = (st.verdict === "ATTACK SUCCEEDED") === st.kase.gt.succeeded;
+    if (correct) this.stats.correct++;
+    if (st.verdict === "ATTACK SUCCEEDED" && !st.kase.gt.succeeded) this.stats.falseBlocks++;
+    if (st.verdict !== "ATTACK SUCCEEDED" && st.kase.gt.succeeded) this.stats.missedBreaches++;
+
+    this.onLog(id, "verdict", `assessment: ${st.verdict} (confidence score ${st.score.toFixed(2)}) → ${st.action}`);
+  }
+
+  _reconsider(id) {
+    const st = this.cases.get(id);
+    if (!st) return;
+    const wasBlocked = st.action && st.action.startsWith("BLOCKED");
+    const update = { text: `server_logs UPDATE: delayed forensic sweep found outbound data transfer (4.2GB) from ${st.kase.target}`, push: 0.6 };
+    st.evidence.push({ type: "server_logs (delayed)", text: update.text, push: update.push });
+    st.score += update.push;
+    this.stats.reconsiderations++;
+    this.onLog(id, "reconsider", `NEW EVIDENCE ARRIVED: ${update.text}`);
+
+    const prevVerdict = st.verdict;
+    if (st.score >= CONFIDENCE_THRESHOLD) st.verdict = "ATTACK SUCCEEDED"; else if (st.score <= -0.4) st.verdict = "ATTACK FAILED (blocked/patched)"; else st.verdict = "INCONCLUSIVE";
+
+    if (prevVerdict !== st.verdict) {
+      if (st.verdict === "ATTACK SUCCEEDED" && !wasBlocked) {
+        st.action = "BLOCKED " + st.kase.srcIp + " (retroactive)";
+        this.stats.blocked++;
+        if (prevVerdict !== "ATTACK SUCCEEDED" && st.kase.gt.succeeded) this.stats.missedBreaches = Math.max(0, this.stats.missedBreaches - 1);
+        this.onLog(id, "action", `act: reconsidered verdict (${prevVerdict} → ${st.verdict}) → simulated firewall block on ${st.kase.srcIp} taken retroactively`);
       }
-    });
-  }
-  escalateSeverity(){
-    Object.values(this.services).forEach(svc=>{
-      if(svc.activeIncident){
-        svc.ticksWithIncident++;
-        if(svc.ticksWithIncident > 3){
-          for(const k of ["latency","error_rate","cpu"]) if(svc.metrics[k]!==undefined) svc.metrics[k]*=1.08;
-        }
-      }
-    });
-  }
-  applyAction(serviceName, action){
-    const svc = this.services[serviceName];
-    if(this.rng() < this.flakyProb) return false;
-    if(action==="no_op" || action==="escalate_to_human") return true;
-    const inc = svc.activeIncident;
-    if(!inc) return true;
-    const fixes = INCIDENTS[inc].fixes;
-    const successProb = fixes[action] ?? 0.03;
-    const roll = this.rng();
-    if(roll < successProb){
-      svc.activeIncident = null; svc.ticksWithIncident = 0;
-      for(const k in svc.metrics) svc.metrics[k] = (BASELINE_METRICS[k]??0) + uniform(this.rng,-3,3);
-      svc.metrics.security_alert = 0;
-    } else if(roll < successProb + 0.15){
-      Object.entries(INCIDENTS[inc].effect).forEach(([k,v])=> svc.metrics[k] = Math.max(BASELINE_METRICS[k]??0, v*0.6));
-    } else if(!(action in fixes) && this.rng() < 0.2){
-      Object.entries(INCIDENTS[inc].effect).forEach(([k])=> { if(svc.metrics[k]!==undefined) svc.metrics[k]*=1.1; });
     }
-    return true;
   }
-  tick(log){ this.tickNum++; this.drift(); this.maybeInject(log); this.escalateSeverity(); }
-}
 
-class AdaptivePolicy {
-  constructor(alpha=0.35, defaultPrior=0.15){ this.alpha=alpha; this.defaultPrior=defaultPrior; this.q={}; }
-  getQ(sig, action){
-    const key = sig+"|"+action;
-    if(!(key in this.q)) this.q[key] = (PRIOR_HINTS[sig]||{})[action] ?? this.defaultPrior;
-    return this.q[key];
-  }
-  rank(sig, exclude){
-    return ACTIONS.filter(a=>a!=="escalate_to_human" && a!=="no_op" && !exclude.has(a))
-      .map(a=>[a, this.getQ(sig,a)]).sort((a,b)=>b[1]-a[1]);
-  }
-  decide(sig, exclude, rng){
-    const ranked = this.rank(sig, exclude);
-    if(ranked.length===0) return ["escalate_to_human", "no untried actions remain"];
-    if(rng() < 0.12) return [choice(rng, ranked.map(r=>r[0])), "exploring to improve estimate"];
-    return [ranked[0][0], `highest learned success rate (${ranked[0][1].toFixed(2)})`];
-  }
-  update(sig, action, reward){
-    const key = sig+"|"+action;
-    const old = this.getQ(sig, action);
-    this.q[key] = old + this.alpha*(reward-old);
-  }
-}
+  override(id, humanVerdict) {
+    const st = this.cases.get(id);
+    if (!st || st.status !== "resolved") return;
+    const wasBlocked = st.action && st.action.startsWith("BLOCKED");
+    st.overridden = true;
+    this.stats.overrides++;
 
-const MAX_ATTEMPTS = 4;
-
-class AdaptiveAgent {
-  constructor(env, log){
-    this.env = env; this.log = log; this.policy = new AdaptivePolicy();
-    this.state = {}; Object.keys(env.services).forEach(n=> this.state[n] = {tried:new Set(), attempts:0});
-    this.stats = {incidents:0, resolved:0, escalations:0, slaTicks:0, stepsSum:0, stepsCount:0};
-  }
-  step(){
-    Object.entries(this.env.services).forEach(([name, svc])=> this.handle(name, svc));
-  }
-  handle(name, svc){
-    const st = this.state[name];
-    if(!svc.isHealthy()) this.stats.slaTicks++;
-    const sig = sigKey(svc.signature());
-    if(!svc.activeIncident){ st.tried.clear(); st.attempts=0; return; }
-    if(st.attempts===0) this.stats.incidents++;
-
-    let action, reason;
-    if(st.attempts >= MAX_ATTEMPTS){ action="escalate_to_human"; reason="retry budget exhausted"; }
-    else [action, reason] = this.policy.decide(sig, st.tried, this.env.rng);
-
-    this.log(`[${name}] observe ${sig} → decide '${action}' (${reason})`, "info");
-
-    if(action==="escalate_to_human"){
-      this.stats.escalations++; this.stats.stepsSum+=st.attempts; this.stats.stepsCount++;
-      this.log(`[${name}] ESCALATED to human after ${st.attempts} attempt(s)`, "bad");
-      svc.activeIncident=null; st.tried.clear(); st.attempts=0; return;
+    if (humanVerdict === "false_positive") {
+      st.verdict = "FALSE POSITIVE (analyst override)";
+      if (wasBlocked) { st.action = "UNBLOCKED (analyst override)"; this.onLog(id, "override", `ANALYST OVERRIDE: unblocked ${st.kase.srcIp}, reclassified as false positive`); }
+      else { st.action = "closed, no action (analyst override)"; this.onLog(id, "override", `ANALYST OVERRIDE: confirmed as false positive`); }
+    } else {
+      st.verdict = "ATTACK SUCCEEDED (analyst override)";
+      if (!wasBlocked) { st.action = "BLOCKED " + st.kase.srcIp + " (analyst override)"; this.stats.blocked++; this.onLog(id, "override", `ANALYST OVERRIDE: analyst confirmed compromise → simulated firewall block on ${st.kase.srcIp}`); }
     }
-
-    st.attempts++;
-    const executed = this.env.applyAction(name, action);
-    let reward, outcome;
-    if(!executed){ reward=0; outcome="tool call failed to execute"; }
-    else if(!svc.activeIncident || svc.isHealthy()){ reward=1; outcome="RESOLVED"; }
-    else {
-      const stillSig = sigKey(svc.signature());
-      reward = stillSig!==sig ? 0.35 : 0;
-      outcome = reward>0 ? "partial improvement" : "no improvement";
-    }
-    const cls = outcome==="RESOLVED" ? "ok" : (outcome.includes("partial") ? "warn" : "bad");
-    this.log(`[${name}] act '${action}' → ${outcome}`, cls);
-
-    this.policy.update(sig, action, reward);
-    if(reward===0) st.tried.add(action);
-    if(outcome==="RESOLVED"){
-      this.stats.resolved++; this.stats.stepsSum+=st.attempts; this.stats.stepsCount++;
-      st.tried.clear(); st.attempts=0;
+    // soft correction: down-weight whichever evidence type most drove the (now-overturned) original call
+    if (st.evidence.length) {
+      const most = st.evidence.reduce((a, b) => (Math.abs(b.push) > Math.abs(a.push) ? b : a));
+      const et = most.type.split(" ")[0];
+      this.policy.update(st.kase.alert.exploit, et, this.policy.w[st.kase.alert.exploit][et] * 0.5);
     }
   }
 }
 
-class BaselineAgent {
-  constructor(env, log){
-    this.env = env; this.log = log; this.active = new Set();
-    this.stats = {incidents:0, resolved:0, escalations:0, slaTicks:0, stepsSum:0, stepsCount:0};
+// --- Naive "Alert-Label Autopilot" baseline: trusts the signature severity word alone ---
+class LabelAutopilot {
+  constructor(onLog = () => {}) {
+    this.onLog = onLog;
+    this.stats = { total: 0, resolved: 0, blocked: 0, falseBlocks: 0, missedBreaches: 0, correct: 0 };
   }
-  step(){ Object.entries(this.env.services).forEach(([name, svc])=> this.handle(name, svc)); }
-  handle(name, svc){
-    if(!svc.isHealthy()) this.stats.slaTicks++;
-    if(!svc.activeIncident){ this.active.delete(name); return; }
-    if(this.active.has(name)) return;
-    this.active.add(name); this.stats.incidents++;
-    const sig = sigKey(svc.signature());
-    const action = STATIC_RUNBOOK[sig] || "restart_service";
-    this.log(`[${name}] runbook lookup ${sig} → fixed action '${action}'`, "info");
-    this.env.applyAction(name, action);
-    this.stats.stepsSum+=1; this.stats.stepsCount++;
-    if(!svc.activeIncident){ this.stats.resolved++; this.log(`[${name}] resolved`, "ok"); }
-    else { this.stats.escalations++; this.log(`[${name}] escalated (no retry)`, "bad"); svc.activeIncident=null; }
+  ingest(kase) {
+    this.stats.total++;
+    const word = kase.alert.severityWord;
+    let action, blocked = false;
+    if (word === "EXPLOIT" || word === "WEB" || word === "TROJAN") { action = "auto-blocked (label looked severe)"; blocked = true; }
+    else if (word === "POLICY") { action = "logged only (label seemed low-severity)"; }
+    else { action = "ignored (label read as routine scan)"; }
+
+    this.stats.resolved++;
+    if (blocked) this.stats.blocked++;
+    const correct = blocked === kase.gt.succeeded;
+    if (correct) this.stats.correct++;
+    if (blocked && !kase.gt.succeeded) this.stats.falseBlocks++;
+    if (!blocked && kase.gt.succeeded) this.stats.missedBreaches++;
+
+    this.onLog(kase.id, `Alert #${kase.id} '${kase.alert.sig}' (${word}) on ${kase.target} → ${action}`);
   }
 }
 
-// ---------------------------------------------------------------- UI ----
-const SERVICES = ["auth-api","checkout-svc","search-svc","notifications-svc"];
+const SentinelOpsSOC = { makeRng, choice, uniform, ASSETS, ALERT_TYPES, EVIDENCE_TYPES, SocPolicy, SocEnvironment, AdaptiveSocAgent, LabelAutopilot };
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = SentinelOpsSOC; // Node (test harness)
+} else if (typeof window !== "undefined") {
+  window.SentinelOpsSOC = SentinelOpsSOC; // browser (docs/index.html)
+}
+
+</script>
+<script>
+const { SocEnvironment: Env, AdaptiveSocAgent: Agent, LabelAutopilot: Autopilot } = SentinelOpsSOC;
+
 const el = id => document.getElementById(id);
 const ticksInput = el("ticks"), seedInput = el("seed"), speedInput = el("speed");
 const runBtn = el("runBtn"), resetBtn = el("resetBtn");
+[ticksInput, seedInput, speedInput].forEach(inp=>{
+  const v = el(inp.id+"Val");
+  inp.addEventListener("input", ()=> v.textContent = inp.value);
+});
 
-function fmtPct(n,d){ return d? (100*n/d).toFixed(1)+"%" : "—"; }
+let timer = null;
+let currentAgent = null;
 
-function renderServices(container, env){
-  container.innerHTML = "";
-  Object.values(env.services).forEach(svc=>{
-    const healthy = svc.isHealthy();
-    const div = document.createElement("div");
-    div.className = "svc";
-    const statusColor = healthy ? "var(--ok)" : "var(--bad)";
-    div.innerHTML = `<span class="name">${svc.name}</span><span class="status" style="color:${statusColor}">${healthy? "healthy" : (svc.activeIncident||"degraded")}</span>`;
-    container.appendChild(div);
-  });
+function verdictClass(v){
+  if(!v) return "inconclusive";
+  if(v.includes("SUCCEEDED")) return "succeeded";
+  if(v.includes("FAILED")) return "failed";
+  if(v.includes("FALSE POSITIVE")) return "benign";
+  return "inconclusive";
 }
-function appendLog(container, text, cls, tick){
-  const div = document.createElement("div");
-  if(container.id.startsWith("logBaseline")){
-    div.textContent = `t${tick}  ${text}`;
-  } else {
-    div.className = "line";
-    div.innerHTML = `<span class="t">t${tick}</span><span class="${cls}">${text}</span>`;
+
+function renderCase(id, st){
+  let card = document.getElementById("case-"+id);
+  if(!card){
+    card = document.createElement("div");
+    card.className = "case";
+    card.id = "case-"+id;
+    el("cases").prepend(card);
   }
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
-  while(container.childElementCount > 200) container.removeChild(container.firstChild);
+  const stepsHtml = st.evidence.map(e=>{
+    const cls = e.type.includes("delayed") ? "reconsider" : "";
+    return `<div class="${cls}">→ ${e.text}</div>`;
+  }).join("");
+  let verdictHtml = "";
+  if(st.status === "resolved"){
+    const cls = verdictClass(st.verdict);
+    verdictHtml = `
+      <div class="verdict-row">
+        <div><span class="badge ${st.overridden ? 'override' : cls}">${st.verdict}</span></div>
+        ${st.overridden ? "" : `<div class="ovr-btns">
+          <button onclick="doOverride(${id}, 'false_positive')">Override → benign</button>
+          <button onclick="doOverride(${id}, 'attack_succeeded')">Override → confirm attack</button>
+        </div>`}
+      </div>
+      <div class="action-line">${st.action}</div>`;
+  }
+  card.innerHTML = `
+    <div class="head"><span><b>#${id}</b> ${st.kase.alert.sig}</span><span>${st.kase.target} · ${st.kase.srcIp}</span></div>
+    <div class="steps">${stepsHtml || "<div>observing…</div>"}</div>
+    ${verdictHtml}
+  `;
+  while(el("cases").childElementCount > 30) el("cases").removeChild(el("cases").lastChild);
 }
-function renderStats(container, stats, isBaseline){
-  const avg = stats.stepsCount? (stats.stepsSum/stats.stepsCount).toFixed(2) : "0.00";
+
+function appendBaselineLog(id, msg){
+  const div = document.createElement("div");
+  div.className = "entry" + (msg.includes("blocked") ? " blocked" : "");
+  div.textContent = msg;
+  el("baselineLog").prepend(div);
+  while(el("baselineLog").childElementCount > 40) el("baselineLog").removeChild(el("baselineLog").lastChild);
+}
+
+function renderStats(container, s, isBaseline){
+  const acc = s.resolved ? (100*s.correct/s.resolved).toFixed(0) : 0;
   container.innerHTML = `
-    <div class="stat"><span class="n">${stats.incidents}</span><span class="l">incidents</span></div>
-    <div class="stat"><span class="n">${stats.resolved}</span><span class="l">self-resolved</span></div>
-    <div class="stat"><span class="n">${stats.escalations}</span><span class="l">escalated</span></div>
-    <div class="stat"><span class="n">${avg}</span><span class="l">avg actions/incident</span></div>
-    <div class="stat"><span class="n">${stats.slaTicks}</span><span class="l">SLA-violation ticks</span></div>
+    <div class="stat"><span class="n">${s.total}</span><span class="l">alerts</span></div>
+    <div class="stat"><span class="n">${s.blocked}</span><span class="l">blocked</span></div>
+    <div class="stat"><span class="n bad">${s.falseBlocks}</span><span class="l">false blocks</span></div>
+    <div class="stat"><span class="n bad">${s.missedBreaches}</span><span class="l">missed breaches</span></div>
+    ${isBaseline ? "" : `<div class="stat"><span class="n">${s.escalations}</span><span class="l">escalated</span></div>`}
+    <div class="stat"><span class="n ok">${acc}%</span><span class="l">correct response</span></div>
   `;
 }
 
-let timer = null;
+function fmtPct(n,d){ return d? (100*n/d).toFixed(1)+"%" : "—"; }
+
+function finalize(a, b){
+  el("barAdaptive").style.width = fmtPct(a.correct, a.resolved);
+  el("barBaseline").style.width = fmtPct(b.correct, b.resolved);
+  el("pctAdaptive").textContent = fmtPct(a.correct, a.resolved);
+  el("pctBaseline").textContent = fmtPct(b.correct, b.resolved);
+  el("verdict").innerHTML = `On the identical alert stream, the SOC agent had <strong>${a.falseBlocks} false blocks</strong> and
+    <strong>${a.missedBreaches} missed breaches</strong> vs. the label autopilot's <strong>${b.falseBlocks} false blocks</strong> and
+    <strong>${b.missedBreaches} missed breaches</strong> — the gap evidence-correlation makes.`;
+}
+
+function doOverride(id, verdict){
+  if(!currentAgent) return;
+  currentAgent.override(id, verdict);
+  renderCase(id, currentAgent.cases.get(id));
+  renderStats(el("adaptiveStats"), currentAgent.stats, false);
+}
+window.doOverride = doOverride;
 
 function runSimulation(){
   runBtn.disabled = true;
-  el("logAdaptive").innerHTML = ""; el("logBaseline").innerHTML = "";
+  el("cases").innerHTML = ""; el("baselineLog").innerHTML = "";
   const seed = parseInt(seedInput.value), totalTicks = parseInt(ticksInput.value);
   const speed = parseInt(speedInput.value);
-  const delay = Math.max(15, 260 - speed*24);
+  const delay = Math.max(20, 320 - speed*28);
 
-  const envA = new Environment(SERVICES, seed);
-  const agentA = new AdaptiveAgent(envA, (msg,cls)=> appendLog(el("logAdaptive"), msg, cls, envA.tickNum));
-  const envB = new Environment(SERVICES, seed);
-  const agentB = new BaselineAgent(envB, (msg,cls)=> appendLog(el("logBaseline"), msg, cls, envB.tickNum));
+  const env = new SocEnvironment(seed);
+  const agent = new AdaptiveSocAgent(env, (id, kind, msg)=>{
+    if(agent.cases.has(id)) renderCase(id, agent.cases.get(id));
+  });
+  const baseline = new LabelAutopilot((id, msg)=> appendBaselineLog(id, msg));
+  currentAgent = agent;
 
-  let i = 0;
+  let t = 0;
   timer = setInterval(()=>{
-    if(i >= totalTicks){
+    if(t >= totalTicks){
       clearInterval(timer); runBtn.disabled = false;
-      finalize(agentA.stats, agentB.stats);
+      finalize(agent.stats, baseline.stats);
       return;
     }
-    envA.tick((m)=>{});
-    agentA.step();
-    envB.tick((m)=>{});
-    agentB.step();
-    renderServices(el("svcAdaptive"), envA);
-    renderServices(el("svcBaseline"), envB);
-    renderStats(el("statsAdaptive"), agentA.stats);
-    renderStats(el("statsBaseline"), agentB.stats);
-    i++;
+    env.tick();
+    const kase = env.maybeSpawnAlert();
+    if(kase){
+      const st = agent.ingest(kase);
+      renderCase(kase.id, st);
+      baseline.ingest(kase);
+    }
+    agent.step();
+    for(const [id, st] of agent.cases) renderCase(id, st);
+    renderStats(el("adaptiveStats"), agent.stats, false);
+    renderStats(el("baselineStats"), baseline.stats, true);
+    t++;
   }, delay);
 }
 
-function finalize(a, b){
-  const aRate = a.incidents? a.resolved/a.incidents : 0;
-  const bRate = b.incidents? b.resolved/b.incidents : 0;
-  el("barAdaptive").style.width = (aRate*100).toFixed(1)+"%";
-  el("barBaseline").style.width = (bRate*100).toFixed(1)+"%";
-  el("pctAdaptive").textContent = fmtPct(a.resolved, a.incidents);
-  el("pctBaseline").textContent = fmtPct(b.resolved, b.incidents);
-  const diff = ((aRate-bRate)*100).toFixed(1);
-  const slaDiff = b.slaTicks - a.slaTicks;
-  el("verdict").innerHTML = `The adaptive loop self-resolved <strong>${diff} percentage points</strong> more incidents than the static runbook on the identical schedule, and left the fleet in an SLA-violating state <strong>${slaDiff}</strong> fewer ticks in total.`;
-}
-
 function resetAll(){
-  clearInterval(timer); runBtn.disabled = false;
-  ["logAdaptive","logBaseline","svcAdaptive","svcBaseline","statsAdaptive","statsBaseline"].forEach(id=> el(id).innerHTML="");
+  clearInterval(timer); runBtn.disabled = false; currentAgent = null;
+  el("cases").innerHTML = ""; el("baselineLog").innerHTML = "";
+  el("adaptiveStats").innerHTML = ""; el("baselineStats").innerHTML = "";
   el("barAdaptive").style.width="0%"; el("barBaseline").style.width="0%";
   el("pctAdaptive").textContent="—"; el("pctBaseline").textContent="—";
-  el("verdict").textContent = "Run the simulation to see the comparison.";
+  el("verdict").textContent = "Run the investigation to see the comparison.";
 }
 
-[ticksInput, seedInput, speedInput].forEach(inp=>{
-  const valEl = el(inp.id+"Val");
-  inp.addEventListener("input", ()=> valEl.textContent = inp.value);
-});
 runBtn.addEventListener("click", runSimulation);
 resetBtn.addEventListener("click", resetAll);
 </script>
