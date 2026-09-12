@@ -608,11 +608,11 @@ function runSimulation(){
   const speed = parseInt(speedInput.value);
   const delay = Math.max(20, 320 - speed*28);
 
-  const env = new SocEnvironment(seed);
-  const agent = new AdaptiveSocAgent(env, (id, kind, msg)=>{
+  const env = new Env(seed);
+  const agent = new Agent(env, (id, kind, msg)=>{
     if(agent.cases.has(id)) renderCase(id, agent.cases.get(id));
   });
-  const baseline = new LabelAutopilot((id, msg)=> appendBaselineLog(id, msg));
+  const baseline = new Autopilot((id, msg)=> appendBaselineLog(id, msg));
   currentAgent = agent;
 
   let t = 0;
